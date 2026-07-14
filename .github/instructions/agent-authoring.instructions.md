@@ -105,6 +105,28 @@ using this heuristic:
 State ownership rules (SRP-like) still apply because they make code
 easier to modify, not because a textbook says so.
 
+## Tests
+
+Tests are agent infrastructure — they let future agents refactor without
+regressing invariants the previous agent knew about. Rules for what tests
+must cover and how they are written live in the pair of always-on files:
+
+- [test-quality.instructions.md](test-quality.instructions.md)
+- [test-style.instructions.md](test-style.instructions.md)
+
+For the review protocol below, that means:
+
+- **New production logic** must land with tests along the applicable
+  coverage dimensions (functional / edge / negative / error /
+  state-transition). Absence is a MINOR finding by default.
+- **Bug fixes** must land with a regression test that reproduces the
+  original failure path via the tier that would have caught the bug in
+  the first place (tier-2 for wire-up bugs, tier-1 for pure-logic bugs).
+  Absence is a BLOCK finding — do not merge a fix without the guard.
+- **Changes to `src/auth.rs`, `src/access.rs`, `src/web/csrf.rs`,
+  `src/web/security.rs`, or `src/error.rs`** carry an elevated bar: any
+  missing test coverage becomes a MAJOR finding, not MINOR.
+
 ## Documentation
 
 `AGENTS.md`, `README.md`, `.github/instructions/**`, `cast/README.md`,
@@ -184,7 +206,7 @@ SEVERITY | AREA | FILE:LINE | one-line summary
   things that MUST be fixed before the change ships (security holes,
   broken invariants, AGENTS.md ground-rule violations). Everything
   else is safe to disposition and move on.
-- `AREA` ∈ `{security, correctness, agent-authoring, modularity,
+- `AREA` ∈ `{security, correctness, tests, agent-authoring, modularity,
   naming, docs, perf, other}`.
 
 A review with no findings returns the literal line `NO FINDINGS`.

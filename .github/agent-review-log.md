@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -411,6 +411,108 @@ JWKS fetch from `https://www.googleapis.com/oauth2/v3/certs`.
 - why:  agent-authoring comments rule: inaccurate boundary comments
   are worse than none.
 - fix:  Rewrote the comment to describe the actual pattern.
+- status: Fixed
+
+## 2026-07-14 — testing-infrastructure
+
+- Author model:   Claude Opus 4.7 (copilot)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - Cargo.toml (dev-dependencies)
+  - src/lib.rs (new) + src/main.rs (slimmed)
+  - src/access.rs (13 inline unit tests)
+  - src/routes/auth.rs (9 inline unit tests)
+  - tests/common/mod.rs (new)
+  - tests/router_smoke.rs (new, 7 integration tests)
+  - .github/instructions/test-quality.instructions.md (new)
+  - .github/instructions/test-style.instructions.md (new)
+  - .github/instructions/agent-authoring.instructions.md (Tests section + AREA enum)
+  - docs/testing/README.md (new)
+  - AGENTS.md (stack table + layout tree + Common tasks)
+
+Change summary: adopted a testing methodology mirroring rad-service and
+built the harness to enforce it. Split the crate into `lib.rs` + thin
+`main.rs` so integration tests boot the same wiring production uses.
+Added `tests/common/mod.rs::build_test_app` that produces an `AppState`
+backed by temp SQLite + tempfile allowlist + empty cast + no-op
+`StoryGenerator`. `tests/router_smoke.rs` spawns the real
+`stuffy_council::serve` on an ephemeral port and hits routes via
+`reqwest` — including the regression test for the `tower_governor`
+`ConnectInfo` bug from the prior commit. Wrote 22 inline unit tests
+covering `AccessList` and `parse_g_csrf_cookie` across the five
+coverage dimensions. New instruction files codify Rule 1 / Rule 2 /
+Rule 3 (cross-component / incident-linked / auth-flow) discipline.
+Updated `agent-authoring.instructions.md` to make missing tests a
+reviewer finding.
+
+### Findings
+
+#### F1 — MINOR | tests | tests/router_smoke.rs | Rule 3.1 route-metadata coverage was incomplete
+- what: 4 of 8 routes in `src/routes/mod.rs` had no anonymous-callers
+  smoke test — `/story/today`, `/council/{id}`, `/logout` all missing.
+- why:  test-quality.instructions.md Rule 3 §1 requires each route
+  to have an access-behavior smoke; shipping the rule and the tests
+  together with half-coverage undercuts the rule.
+- fix:  Added `get_story_today_redirects_anonymous_to_login`,
+  `get_council_detail_redirects_anonymous_to_login`, and
+  `post_logout_without_csrf_returns_403`. `/auth/google/verify`
+  remains deferred — needs a signed-JWT harness that's out of scope
+  here; deferred is noted in the module-level doc comment.
+- status: Fixed (with `/auth/google/verify` explicitly deferred)
+
+#### F2 — MINOR | tests | src/access.rs + src/routes/auth.rs | Omitted coverage dimensions not annotated with the required N/A note
+- what: `AccessList` tests omitted state-transition dimension
+  (read-only registry); `parse_g_csrf_cookie` tests omitted
+  state-transition AND error-handling (pure stateless parser).
+  Neither module's `mod tests` carried the N/A note the new rule
+  requires.
+- why:  test-quality.instructions.md Coverage dimensions rule
+  requires an explicit N/A note per omitted dimension.
+- fix:  Added a top-of-`mod tests` comment in each module listing
+  the covered dimensions and naming the N/A dimensions with reason.
+- status: Fixed
+
+#### F3 — MINOR | docs | test-quality.instructions.md frontmatter + docs/testing/README.md | Declared out-of-repo rad-service docs "authoritative"
+- what: Both files told agents that rad-service's framework doc was
+  authoritative and to "propagate" changes over — an unenforceable
+  cross-repo instruction since agents here can't reach rad-service.
+- why:  agent-authoring.instructions.md Documentation section:
+  cross-links must use workspace-relative paths agents can follow,
+  and rules without an enforcement path get deleted.
+- fix:  Reworded both docs to make this repo's instruction files
+  authoritative for this repo, demoting the rad-service mention to
+  a plain provenance note.
+- status: Fixed
+
+#### F4 — NIT | docs | tests/router_smoke.rs header | Referenced rad-service's section numbers and a not-yet-existent log entry slug
+- what: The module doc mentioned "Section 3.7 Rule 3" (rad-service's
+  numbering, absent from this repo's docs) and a specific log-entry
+  slug that hadn't been written yet.
+- why:  agent-authoring.instructions.md Comments / Documentation
+  rules on followable cross-links.
+- fix:  Cite "Rule 3: Auth flows" by heading name with a link to the
+  local instruction file; drop the pre-emptive log-slug reference.
+- status: Fixed
+
+#### F5 — NIT | agent-authoring | src/access.rs + src/routes/auth.rs | ASCII dividers between test blocks
+- what: `// ---- Functional ----`, etc. inside both `mod tests`.
+- why:  agent-authoring.instructions.md Comments rule explicitly
+  bans aesthetic dividers / section headers.
+- fix:  Deleted the dividers; folded the intent into the top-of-mod
+  N/A note (which also resolves F2).
+- status: Fixed
+
+#### F6 — NIT | tests | test-quality Rule 5 vs test-style scaffolding step 4 | Internal contradiction on the readiness sleep
+- what: Rule 5 forbade wall-clock dependence; test-style step 4
+  prescribed a fixed 50ms readiness sleep. On paper the two rules
+  contradicted, even though the sleep itself is stable in practice.
+- why:  Q5 self-consistency; the two always-on files should not
+  appear to disagree with each other.
+- fix:  Added a "sanctioned exception" clause to Rule 5 naming the
+  spawn readiness sleep in `tests/router_smoke.rs::spawn` and
+  requiring written justification for any other timing-dependent
+  construct.
 - status: Fixed
 
 (Log grows from here.)

@@ -175,3 +175,69 @@ fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
         .map_err(|e| AppError::Internal(anyhow::anyhow!("template render: {e}")))?;
     Ok(Html(body))
 }
+
+#[cfg(test)]
+mod tests {
+    // Covers functional / edge / negative dimensions.
+    // error-handling N/A: parse_g_csrf_cookie is a pure string parser with
+    // no I/O and no fallible dependencies — every failure mode is `None`.
+    // state-transition N/A: parse_g_csrf_cookie is stateless.
+
+    use super::*;
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_from_solo_cookie() {
+        let got = parse_g_csrf_cookie("g_csrf_token=abc123");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_when_flanked_by_other_cookies() {
+        let got = parse_g_csrf_cookie("stuffy_session=xyz; g_csrf_token=abc123; other=1");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_from_leading_position_no_space() {
+        let got = parse_g_csrf_cookie("g_csrf_token=abc123;stuffy_session=xyz");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_empty_value_is_returned_as_empty_string() {
+        // Handler still rejects empty via `cookie_token.is_empty()` check;
+        // parser's contract is "return whatever is there or None."
+        let got = parse_g_csrf_cookie("g_csrf_token=");
+        assert_eq!(got.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_tolerates_whitespace_between_pairs() {
+        let got = parse_g_csrf_cookie("stuffy_session=xyz;   g_csrf_token=abc123");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_missing_cookie_returns_none() {
+        assert!(parse_g_csrf_cookie("stuffy_session=xyz; other=1").is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_empty_header_returns_none() {
+        assert!(parse_g_csrf_cookie("").is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_does_not_match_prefix_collisions() {
+        // A cookie named `g_csrf_token_other` must not satisfy the lookup.
+        let got = parse_g_csrf_cookie("g_csrf_token_other=nope; stuffy_session=xyz");
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_bare_name_without_equals_is_ignored() {
+        let got = parse_g_csrf_cookie("g_csrf_token; stuffy_session=xyz");
+        assert!(got.is_none());
+    }
+}
+

@@ -37,13 +37,15 @@ The running review log lives at
 | LLM                | Ollama HTTP API (`/api/generate`, `stream=false`) |
 | Rate limiting      | `tower_governor` per client IP             |
 | Styling            | Tailwind (CDN for now — vendor before production) |
+| Testing            | Built-in `cargo test`; unit tests inline, integration in `tests/*.rs` |
 | Deploy target      | Azure Container Apps (Ollama runs external) |
 
 ## Layout
 
 ```
 src/
-  main.rs           # boot: config, DB, generator, layers, serve
+  main.rs           # CLI wrapper: parses env, builds AppState, calls serve
+  lib.rs            # public serve(state, listener) + module declarations
   config.rs         # env parsing, fails loud
   db.rs             # SQLite pool + migrations
   auth.rs           # Google Identity Services: JwkCache, verify_id_token, SessionUser, upsert_user
@@ -68,6 +70,11 @@ templates/          # Askama .html templates (extend base.html)
 cast/               # One TOML per character (stuffies + humans); filename = stable id
 authorized-users.toml  # Committed allowlist (email + admin flag)
 migrations/         # sqlx migrations, applied on startup
+tests/              # tier-2 integration tests (see docs/testing/README.md)
+  common/mod.rs     # shared TestApp harness
+  router_smoke.rs   # boots app on ephemeral port, hits real routes
+docs/
+  testing/README.md # tier map + pointers to instruction files
 ```
 
 ## Ground rules
@@ -171,6 +178,16 @@ for future comparisons.
 **Swap Ollama for something else** (hosted API, another local runtime):
 add an `impl StoryGenerator for MyNewThing` and wire it up in
 `main.rs`. Nothing else changes.
+
+**Add a test.** Unit test → inline `#[cfg(test)] mod tests` at the
+bottom of the module. Integration test → new file under `tests/`; use
+`mod common;` and call `common::build_test_app().await` to get an
+`AppState`, then `tokio::spawn(stuffy_council::serve(state, listener))`
+on an ephemeral port. Rules in
+[.github/instructions/test-quality.instructions.md](.github/instructions/test-quality.instructions.md)
+and
+[.github/instructions/test-style.instructions.md](.github/instructions/test-style.instructions.md);
+orientation in [docs/testing/README.md](docs/testing/README.md).
 
 ## Non-goals (for now)
 

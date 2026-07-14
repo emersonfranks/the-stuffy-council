@@ -72,6 +72,10 @@ time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"
 # Dev-time env loading (not used in production containers — env vars come from the platform)
 dotenvy = "0.15"
 
+[dev-dependencies]
+# Scratch directories/files for the-database + allowlist wire-ups in integration tests.
+tempfile = "3"
+
 [profile.release]
 opt-level = 3
 lto = "thin"
