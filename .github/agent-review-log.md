@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -336,4 +336,82 @@ image now COPYs `authorized-users.toml` into `/app/`.
   (case-insensitive gate, PR-to-modify, duplicates + prod-empty
   boot errors).
 - status: Fixed
+
+## 2026-07-14 — replace-oauth-code-flow-with-gis
+
+- Author model:   Claude Opus 4.7 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - Cargo.toml
+  - src/auth.rs (fully rewritten)
+  - src/routes/auth.rs (fully rewritten)
+  - src/routes/mod.rs
+  - src/state.rs
+  - src/main.rs
+  - src/config.rs
+  - src/web/security.rs
+  - templates/base.html
+  - templates/login.html
+  - .env.example
+  - AGENTS.md
+  - README.md
+
+Change summary: replaced the Google OAuth 2.0 authorization-code flow
+(with client_secret, PKCE, and server-side token exchange) with
+Google Identity Services (GIS). Server no longer holds any Google
+secret. New shape: browser embeds GIS JS lib, Google renders the
+button and handles auth on their side, POSTs a signed ID token JWT
+to `/auth/google/verify`. The verify handler double-submits GIS's
+`g_csrf_token`, verifies the JWT against Google's public JWKS (cached
+with on-miss refresh), enforces `email_verified`, gates on the
+allowlist, upserts the user, and cycles the session id. Dropped
+`oauth2` crate + `GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URL` env vars;
+added `jsonwebtoken`. Public `GOOGLE_CLIENT_ID` sits in the login-page
+HTML source. Booted end-to-end with a fake client_id and verified
+JWKS fetch from `https://www.googleapis.com/oauth2/v3/certs`.
+
+### Findings
+
+#### F1 — MINOR | correctness | src/config.rs:61 | PUBLIC_ORIGIN fallback still emits 127.0.0.1, which GIS rejects for local HTTP
+- what: When PUBLIC_ORIGIN is omitted, the login URI fell back to
+  `http://{bind_addr}` → `http://127.0.0.1:8080/auth/google/verify`,
+  contradicting the docs that say GIS requires literal `localhost`
+  for plain-HTTP dev.
+- why:  AGENTS.md local-dev guidance; safe-modification invariant.
+- fix:  Changed the fallback to `http://localhost:{bind_addr.port()}`
+  with a comment explaining why it's not `bind_addr`.
+- status: Fixed
+
+#### F2 — MINOR | security | src/web/security.rs:31 | GIS CSP sources wider than the documented GIS surface
+- what: CSP allowed whole-origin `https://accounts.google.com`,
+  added `https://apis.google.com`, and included Google in
+  `form-action` \u2014 wider than what GIS documents.
+- why:  agent-authoring policy: safety/security assertions must not
+  be relaxed without careful review.
+- fix:  Narrowed script-src / style-src / connect-src / frame-src
+  to the specific `/gsi/...` paths GIS actually loads; dropped
+  `apis.google.com`; reverted `form-action` to `'self'` (Google's
+  POST is initiated on Google's own page, governed by their CSP).
+- status: Fixed
+
+#### F3 — MINOR | docs | AGENTS.md rule 1 | CSRF rule did not document the intentional GIS exception
+- what: Rule 1 said every state-changing route must call
+  `crate::web::csrf::verify`, but `/auth/google/verify` intentionally
+  uses GIS's `g_csrf_token` cookie/form double-submit instead.
+- why:  Documentation-rule enforceability + current-state accuracy.
+- fix:  Added an *Exception* clause under rule 1 naming the GIS
+  handler and requiring the double-submit before the JWT verify.
+- status: Fixed
+
+#### F4 — NIT | agent-authoring | src/routes/mod.rs:20 | route comment referred to a nonexistent SessionUser extractor
+- what: Comment claimed auth is applied "via the SessionUser
+  extractor"; actually each handler calls a local `require_user`
+  helper and returns Redirect::to("/login") on `None`.
+- why:  agent-authoring comments rule: inaccurate boundary comments
+  are worse than none.
+- fix:  Rewrote the comment to describe the actual pattern.
+- status: Fixed
+
+(Log grows from here.)
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 
 use crate::access::AccessList;
-use crate::auth::GoogleOAuthClient;
+use crate::auth::JwkCache;
 use crate::cast::CastRegistry;
 use crate::config::Config;
 use crate::stories::StoryService;
@@ -16,12 +16,10 @@ pub struct AppState {
     pub db: SqlitePool,
     pub cast: Arc<CastRegistry>,
     pub stories: StoryService,
-    /// Configured oauth2 client for Google. Cheap to clone (Arc-shared internally).
-    pub oauth: GoogleOAuthClient,
-    /// Shared HTTP client. Same instance is used for the token exchange and the
-    /// userinfo call — both need `redirect(Policy::none())` per oauth2 guidance.
-    pub http: reqwest::Client,
     /// Committed allowlist. Sole gate after a successful Google sign-in;
     /// also carries the `admin` flag stashed on `SessionUser`.
     pub access: Arc<AccessList>,
+    /// Google JWKS cache. Verifies signatures on incoming ID tokens
+    /// without ever holding a client secret.
+    pub jwks: Arc<JwkCache>,
 }

@@ -76,17 +76,17 @@ async fn main() -> Result<()> {
     )?);
     let stories = StoryService::new(generator, cast.clone());
 
-    let oauth = auth::google_client(&config).context("configuring Google OAuth client")?;
-    // Shared HTTP client used for both the token exchange (oauth2 crate) and
-    // the userinfo GET. redirect(Policy::none()) is REQUIRED per the oauth2
-    // crate's security guidance to prevent SSRF via redirect chains from the
-    // token endpoint.
-    let http = reqwest::ClientBuilder::new()
-        .redirect(reqwest::redirect::Policy::none())
+    // Warm the Google JWKS cache before serving so the first sign-in doesn't
+    // pay the fetch cost. On subsequent unknown-`kid` verifies the cache
+    // refreshes itself; a Google outage during boot fails loud.
+    let jwks_http = reqwest::ClientBuilder::new()
         .timeout(std::time::Duration::from_secs(15))
         .user_agent(concat!("stuffy-council/", env!("CARGO_PKG_VERSION")))
         .build()
-        .context("building HTTP client for Google")?;
+        .context("building HTTP client for Google JWKS")?;
+    let jwks = Arc::new(auth::JwkCache::new(jwks_http));
+    jwks.refresh().await.context("initial Google JWKS fetch")?;
+    tracing::info!(count = jwks.len().await, "loaded Google JWKS");
 
     let session_store = SqliteStore::new(db.clone());
     session_store
@@ -116,9 +116,8 @@ async fn main() -> Result<()> {
         db,
         cast,
         stories,
-        oauth,
-        http,
         access,
+        jwks,
     };
 
     // Build the router and stack the security-header layers on top.

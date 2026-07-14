@@ -1,27 +1,42 @@
-//! Login / logout routes. Sign-in delegates to Google OAuth.
+//! Sign-in and sign-out routes.
+//!
+//! Auth is delegated entirely to Google Identity Services (GIS). The login
+//! page embeds Google's button; on success Google POSTs an ID token JWT
+//! here. We verify it against Google's public JWKS, gate on the allowlist,
+//! and open a session. No OAuth 2.0 code flow, no client_secret.
 
 use askama::Template;
 use axum::Form;
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 use tower_sessions::Session;
 
-use crate::auth::{self, OAUTH_STATE_KEY, PendingOAuth, SESSION_USER_KEY, SessionUser};
+use crate::auth::{self, SESSION_USER_KEY, SessionUser};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::web::csrf;
 
+/// Name of the double-submit CSRF cookie Google GIS sets when it POSTs the
+/// credential to our login endpoint. Same string appears in the form body.
+const GOOGLE_CSRF_COOKIE: &str = "g_csrf_token";
+
 #[derive(Template)]
 #[template(path = "login.html")]
-struct LoginTemplate {
+struct LoginTemplate<'a> {
     error: Option<&'static str>,
+    google_client_id: &'a str,
+    login_uri: String,
 }
 
-/// GET /login — shows the "Sign in with Google" button. If a valid
-/// session already exists, redirect straight home.
-pub async fn show_login(session: Session, Query(q): Query<LoginQuery>) -> AppResult<Response> {
+/// GET /login — renders the GIS sign-in button. If a valid session already
+/// exists, redirect straight home.
+pub async fn show_login(
+    State(state): State<AppState>,
+    session: Session,
+    Query(q): Query<LoginQuery>,
+) -> AppResult<Response> {
     if session
         .get::<SessionUser>(SESSION_USER_KEY)
         .await
@@ -32,11 +47,16 @@ pub async fn show_login(session: Session, Query(q): Query<LoginQuery>) -> AppRes
     }
     let error = match q.error.as_deref() {
         Some("denied") => Some("That Google account is not on the allowlist for this site."),
-        Some("state") => Some("Sign-in state expired. Please try again."),
+        Some("csrf") => Some("Sign-in request failed a security check. Please try again."),
         Some("google") => Some("Google sign-in failed. Please try again."),
         _ => None,
     };
-    let tpl = LoginTemplate { error };
+    let login_uri = format!("{}/auth/google/verify", state.config.public_origin);
+    let tpl = LoginTemplate {
+        error,
+        google_client_id: &state.config.google_client_id,
+        login_uri,
+    };
     Ok(render(&tpl)?.into_response())
 }
 
@@ -45,93 +65,66 @@ pub struct LoginQuery {
     error: Option<String>,
 }
 
-/// GET /auth/google — kicks off the OAuth 2.0 authorization-code flow with
-/// PKCE. Stashes CSRF+verifier in the session, redirects to Google.
-pub async fn start_google(
-    State(state): State<AppState>,
-    session: Session,
-) -> AppResult<Response> {
-    let (auth_url, pending) = auth::begin_authorization(&state.oauth);
-    session
-        .insert(OAUTH_STATE_KEY, &pending)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("session insert oauth state: {e}")))?;
-    Ok(Redirect::to(auth_url.as_str()).into_response())
-}
-
+/// Form body Google GIS POSTs to our login endpoint.
+///
+/// The struct field `g_csrf_token` intentionally matches the wire name so
+/// we don't need a serde rename attribute (also matches the cookie name).
 #[derive(Deserialize)]
-pub struct GoogleCallback {
-    code: Option<String>,
-    state: Option<String>,
-    /// Present when the user cancels or Google rejects consent.
-    error: Option<String>,
+pub struct VerifyForm {
+    credential: String,
+    g_csrf_token: String,
 }
 
-/// GET /auth/google/callback — Google redirects the browser here with a
-/// `code` (success) or an `error` (denial). We verify state, exchange the
-/// code, fetch userinfo, check the allowlist, upsert the user, rotate the
-/// session id, and drop them at `/`.
-pub async fn google_callback(
+/// POST /auth/google/verify — Google GIS delivers the signed ID token here.
+///
+/// Steps:
+///   1. Double-submit CSRF: the `g_csrf_token` cookie must equal the form
+///      field. Only our own origin can read the cookie, so if they match,
+///      the POST was initiated from a page we rendered.
+///   2. Verify the ID token: signature (against Google's JWKS), issuer,
+///      audience (== our client_id), expiry, and `email_verified`.
+///   3. Allowlist gate: the email must be present in `authorized-users.toml`.
+///   4. Upsert user row, cycle session id (fixation defense), stash SessionUser.
+pub async fn google_verify(
     State(state): State<AppState>,
     session: Session,
-    Query(cb): Query<GoogleCallback>,
+    headers: HeaderMap,
+    Form(form): Form<VerifyForm>,
 ) -> AppResult<Response> {
-    // Consume the pending state regardless of outcome — do NOT leave
-    // stale challenges sitting in the session.
-    let pending: Option<PendingOAuth> = session
-        .remove(OAUTH_STATE_KEY)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("session remove oauth state: {e}")))?;
-
-    if let Some(err) = cb.error.as_deref() {
-        tracing::info!(google_error = %err, "user denied or Google rejected consent");
-        return Ok(Redirect::to("/login?error=google").into_response());
+    let Some(cookie_token) = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_g_csrf_cookie)
+    else {
+        tracing::warn!("google verify: missing g_csrf_token cookie");
+        return Ok(Redirect::to("/login?error=csrf").into_response());
+    };
+    if cookie_token.is_empty() || cookie_token != form.g_csrf_token {
+        tracing::warn!("google verify: g_csrf_token mismatch");
+        return Ok(Redirect::to("/login?error=csrf").into_response());
     }
 
-    let Some(pending) = pending else {
-        // Callback with no matching session state: someone hit /callback
-        // directly, or the session expired between clicks.
-        tracing::warn!("oauth callback without pending session state");
-        return Ok(Redirect::to("/login?error=state").into_response());
-    };
-
-    let (Some(code), Some(returned_state)) = (cb.code, cb.state) else {
-        tracing::warn!("oauth callback missing code or state param");
-        return Ok(Redirect::to("/login?error=state").into_response());
-    };
-
-    if !constant_time_eq(pending.csrf.as_bytes(), returned_state.as_bytes()) {
-        tracing::warn!("oauth callback state mismatch");
-        return Ok(Redirect::to("/login?error=state").into_response());
-    }
-
-    let token = match auth::exchange_code(&state.oauth, &state.http, code, pending.pkce_verifier)
-        .await
+    let claims = match auth::verify_id_token(
+        &state.jwks,
+        &state.config.google_client_id,
+        &form.credential,
+    )
+    .await
     {
-        Ok(t) => t,
+        Ok(c) => c,
         Err(e) => {
-            tracing::warn!(error = ?e, "google token exchange failed");
+            tracing::warn!(error = ?e, "google id token verification failed");
             return Ok(Redirect::to("/login?error=google").into_response());
         }
     };
 
-    use oauth2::TokenResponse;
-    let info = match auth::fetch_userinfo(&state.http, token.access_token().secret()).await {
-        Ok(i) => i,
-        Err(e) => {
-            tracing::warn!(error = ?e, "google userinfo fetch failed");
-            return Ok(Redirect::to("/login?error=google").into_response());
-        }
-    };
-
-    // Allowlist gate — the only access-control decision beyond Google.
-    let Some(entry) = state.access.check(&info.email) else {
-        tracing::warn!(email = %info.email, "sign-in blocked: not on allowlist");
+    let Some(entry) = state.access.check(&claims.email) else {
+        tracing::warn!(email = %claims.email, "sign-in blocked: not on allowlist");
         return Ok(Redirect::to("/login?error=denied").into_response());
     };
     let admin = entry.admin;
 
-    let user = auth::upsert_user(&state.db, &info, admin)
+    let user = auth::upsert_user(&state.db, &claims, admin)
         .await
         .map_err(AppError::Internal)?;
 
@@ -164,12 +157,16 @@ pub async fn do_logout(session: Session, Form(form): Form<LogoutForm>) -> AppRes
     Ok((StatusCode::SEE_OTHER, Redirect::to("/login")).into_response())
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    use subtle::ConstantTimeEq;
-    if a.len() != b.len() {
-        return false;
+/// Pull the value of the `g_csrf_token` cookie from a raw `Cookie:` header.
+/// Returns None if the cookie is absent.
+fn parse_g_csrf_cookie(cookie_header: &str) -> Option<String> {
+    let prefix = format!("{GOOGLE_CSRF_COOKIE}=");
+    for part in cookie_header.split(';') {
+        if let Some(v) = part.trim().strip_prefix(&prefix) {
+            return Some(v.to_owned());
+        }
     }
-    a.ct_eq(b).unwrap_u8() == 1
+    None
 }
 
 fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {

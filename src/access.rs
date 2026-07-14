@@ -14,7 +14,6 @@ use crate::config::Environment;
 
 #[derive(Debug, Clone)]
 pub struct AuthorizedUser {
-    pub email: String,
     pub admin: bool,
 }
 
@@ -58,9 +57,8 @@ impl AccessList {
                 ));
             }
             by_email.insert(
-                email.clone(),
+                email,
                 AuthorizedUser {
-                    email,
                     admin: entry.admin,
                 },
             );
@@ -82,9 +80,5 @@ impl AccessList {
 
     pub fn len(&self) -> usize {
         self.by_email.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.by_email.is_empty()
     }
 }

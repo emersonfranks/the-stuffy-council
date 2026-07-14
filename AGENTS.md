@@ -33,7 +33,7 @@ The running review log lives at
 | Templates          | `askama` 0.14 (compile-time, escapes by default) |
 | Storage            | SQLite via `sqlx` 0.8 (WAL, foreign keys on) |
 | Sessions           | `tower-sessions` + `tower-sessions-sqlx-store` (server-side) |
-| Auth               | Google OAuth 2.0 (`oauth2` 5) + allowlist   |
+| Auth               | Google Identity Services (client-side JWT) + committed allowlist |
 | LLM                | Ollama HTTP API (`/api/generate`, `stream=false`) |
 | Rate limiting      | `tower_governor` per client IP             |
 | Styling            | Tailwind (CDN for now — vendor before production) |
@@ -46,7 +46,7 @@ src/
   main.rs           # boot: config, DB, generator, layers, serve
   config.rs         # env parsing, fails loud
   db.rs             # SQLite pool + migrations
-  auth.rs           # Google OAuth client, SessionUser, upsert_user
+  auth.rs           # Google Identity Services: JwkCache, verify_id_token, SessionUser, upsert_user
   error.rs          # single AppError enum + IntoResponse
   state.rs          # AppState passed to handlers
   cast.rs           # CastRegistry (loads cast/*.toml — stuffies + humans)
@@ -57,7 +57,7 @@ src/
     ollama.rs       # Ollama impl
   routes/
     mod.rs          # Router assembly
-    auth.rs         # /login, /auth/google (+ /callback), /logout
+    auth.rs         # /login, /auth/google/verify, /logout
     home.rs         # /, /story/today
     characters.rs   # /council, /council/{id}
   web/
@@ -76,6 +76,11 @@ migrations/         # sqlx migrations, applied on startup
    `crate::web::csrf::verify(&session, submitted).await?` at the top of any
    `POST` handler. New form templates MUST include `<input type="hidden"
    name="_csrf" value="{{ csrf_token }}">`.
+   *Exception:* `POST /auth/google/verify` uses Google's `g_csrf_token`
+   double-submit (cookie value must equal the form field) instead, because
+   the request originates from a Google-hosted form and no prior page of
+   ours minted the CSRF token. That check must run before the ID token is
+   verified.
 2. **Every protected route MUST call `require_user(&session)` and redirect
    to `/login` on `None`.** Do not sprinkle auth checks; use the helper.
 3. **Never build SQL with `format!`. Always use `sqlx::query(...).bind(...)`**
@@ -105,14 +110,21 @@ cp .env.example .env
 #   Bash:                openssl rand -hex 64
 # Paste it into SESSION_SECRET.
 
-# Google OAuth setup (one-time):
+# Google sign-in setup (one-time):
+#   Auth is delegated to Google Identity Services (client-side). Our server
+#   only holds a PUBLIC client_id; there is NO client secret in this project.
 #   1. https://console.cloud.google.com/ → pick a project (or create one).
 #   2. APIs & Services → Credentials → Create Credentials → OAuth client ID.
 #   3. Application type: Web application.
-#   4. Authorized redirect URIs: http://127.0.0.1:8080/auth/google/callback
-#      (add your production URL too when you deploy).
-#   5. Copy the client ID + secret into GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
-#   6. Make sure your Gmail is in `authorized-users.toml` at the repo root — anyone
+#   4. Authorized JavaScript origins:
+#        Dev:  http://localhost:8080
+#        Prod: https://<your-domain>
+#   5. Authorized redirect URIs (this is where GIS POSTs the ID token JWT):
+#        Dev:  http://localhost:8080/auth/google/verify
+#        Prod: https://<your-domain>/auth/google/verify
+#   6. Copy the Client ID into GOOGLE_CLIENT_ID. Ignore the client secret —
+#      GIS does not use it and we never store it.
+#   7. Make sure your Gmail is in `authorized-users.toml` at the repo root — anyone
 #      not listed there is rejected after the Google round-trip.
 
 # Start Ollama (separately) and pull a model:
@@ -121,7 +133,9 @@ ollama pull llama3.1:8b-instruct-q4_K_M
 
 # Run the app:
 cargo run
-# → http://127.0.0.1:8080 → sign in with a Google account on the allowlist
+# → http://localhost:8080  (use `localhost`, NOT 127.0.0.1 — Google GIS
+#   only allows plain HTTP on the literal `localhost` hostname)
+# → sign in with a Google account listed in authorized-users.toml
 ```
 
 ## Deploy target — Azure Container Apps
