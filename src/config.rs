@@ -3,6 +3,7 @@
 //! We fail loud at startup if anything required is missing or nonsensical —
 //! misconfiguration should never be a runtime surprise.
 
+use std::collections::BTreeSet;
 use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -29,6 +30,13 @@ pub struct Config {
     pub public_origin: String,
     pub session_secret: Vec<u8>,
     pub database_url: String,
+    pub google_client_id: String,
+    pub google_client_secret: String,
+    pub google_redirect_url: String,
+    /// Lowercased, whitespace-trimmed set of Gmail addresses permitted to
+    /// sign in. Membership is the ONLY gate after a successful Google
+    /// round-trip. Empty set means no one can sign in.
+    pub allowed_emails: BTreeSet<String>,
     pub ollama_url: String,
     pub ollama_model: String,
     pub ollama_timeout: Duration,
@@ -55,6 +63,7 @@ impl Config {
 
         let public_origin =
             env::var("PUBLIC_ORIGIN").unwrap_or_else(|_| format!("http://{bind_addr}"));
+        let public_origin = public_origin.trim_end_matches('/').to_string();
 
         let session_secret_raw =
             env::var("SESSION_SECRET").context("SESSION_SECRET is required")?;
@@ -74,6 +83,33 @@ impl Config {
 
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "sqlite://stuffy-council.sqlite?mode=rwc".into());
+
+        let google_client_id =
+            env::var("GOOGLE_CLIENT_ID").context("GOOGLE_CLIENT_ID is required")?;
+        if google_client_id.trim().is_empty() {
+            return Err(anyhow!("GOOGLE_CLIENT_ID is empty"));
+        }
+        // .env.example ships GOOGLE_CLIENT_SECRET empty; empty at boot means the
+        // operator forgot to paste it in and the app cannot function.
+        let google_client_secret =
+            env::var("GOOGLE_CLIENT_SECRET").context("GOOGLE_CLIENT_SECRET is required")?;
+        if google_client_secret.trim().is_empty() {
+            return Err(anyhow!("GOOGLE_CLIENT_SECRET is empty"));
+        }
+        let google_redirect_url = env::var("GOOGLE_REDIRECT_URL")
+            .unwrap_or_else(|_| format!("{public_origin}/auth/google/callback"));
+
+        let allowed_emails: BTreeSet<String> = env::var("ALLOWED_EMAILS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if env == Environment::Production && allowed_emails.is_empty() {
+            return Err(anyhow!(
+                "ALLOWED_EMAILS must list at least one address in production"
+            ));
+        }
 
         let ollama_url = env::var("OLLAMA_URL").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
         let ollama_model =
@@ -99,6 +135,10 @@ impl Config {
             public_origin,
             session_secret,
             database_url,
+            google_client_id,
+            google_client_secret,
+            google_redirect_url,
+            allowed_emails,
             ollama_url,
             ollama_model,
             ollama_timeout,

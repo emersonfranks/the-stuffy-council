@@ -1,14 +1,14 @@
-//! Login / logout routes.
+//! Login / logout routes. Sign-in delegates to Google OAuth.
 
 use askama::Template;
 use axum::Form;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 use tower_sessions::Session;
 
-use crate::auth::{self, SESSION_USER_KEY, SessionUser};
+use crate::auth::{self, OAUTH_STATE_KEY, PendingOAuth, SESSION_USER_KEY, SessionUser};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::web::csrf;
@@ -16,12 +16,12 @@ use crate::web::csrf;
 #[derive(Template)]
 #[template(path = "login.html")]
 struct LoginTemplate {
-    csrf_token: String,
     error: Option<&'static str>,
 }
 
-pub async fn show_login(session: Session) -> AppResult<Response> {
-    // If already logged in, bounce home.
+/// GET /login — shows the "Sign in with Google" button. If a valid
+/// session already exists, redirect straight home.
+pub async fn show_login(session: Session, Query(q): Query<LoginQuery>) -> AppResult<Response> {
     if session
         .get::<SessionUser>(SESSION_USER_KEY)
         .await
@@ -30,42 +30,111 @@ pub async fn show_login(session: Session) -> AppResult<Response> {
     {
         return Ok(Redirect::to("/").into_response());
     }
-    let csrf_token = csrf::token(&session).await?;
-    let tpl = LoginTemplate {
-        csrf_token,
-        error: None,
+    let error = match q.error.as_deref() {
+        Some("denied") => Some("That Google account is not on the allowlist for this site."),
+        Some("state") => Some("Sign-in state expired. Please try again."),
+        Some("google") => Some("Google sign-in failed. Please try again."),
+        _ => None,
     };
+    let tpl = LoginTemplate { error };
     Ok(render(&tpl)?.into_response())
 }
 
 #[derive(Deserialize)]
-pub struct LoginForm {
-    username: String,
-    password: String,
-    #[serde(rename = "_csrf")]
-    csrf: String,
+pub struct LoginQuery {
+    error: Option<String>,
 }
 
-pub async fn do_login(
+/// GET /auth/google — kicks off the OAuth 2.0 authorization-code flow with
+/// PKCE. Stashes CSRF+verifier in the session, redirects to Google.
+pub async fn start_google(
     State(state): State<AppState>,
     session: Session,
-    Form(form): Form<LoginForm>,
 ) -> AppResult<Response> {
-    csrf::verify(&session, &form.csrf).await?;
+    let (auth_url, pending) = auth::begin_authorization(&state.oauth);
+    session
+        .insert(OAUTH_STATE_KEY, &pending)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("session insert oauth state: {e}")))?;
+    Ok(Redirect::to(auth_url.as_str()).into_response())
+}
 
-    let user = match auth::authenticate(&state.db, form.username.trim(), &form.password).await? {
-        Some(u) => u,
-        None => {
-            let csrf_token = csrf::token(&session).await?;
-            let tpl = LoginTemplate {
-                csrf_token,
-                error: Some("Invalid username or password."),
-            };
-            return Ok((StatusCode::UNAUTHORIZED, render(&tpl)?).into_response());
+#[derive(Deserialize)]
+pub struct GoogleCallback {
+    code: Option<String>,
+    state: Option<String>,
+    /// Present when the user cancels or Google rejects consent.
+    error: Option<String>,
+}
+
+/// GET /auth/google/callback — Google redirects the browser here with a
+/// `code` (success) or an `error` (denial). We verify state, exchange the
+/// code, fetch userinfo, check the allowlist, upsert the user, rotate the
+/// session id, and drop them at `/`.
+pub async fn google_callback(
+    State(state): State<AppState>,
+    session: Session,
+    Query(cb): Query<GoogleCallback>,
+) -> AppResult<Response> {
+    // Consume the pending state regardless of outcome — do NOT leave
+    // stale challenges sitting in the session.
+    let pending: Option<PendingOAuth> = session
+        .remove(OAUTH_STATE_KEY)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("session remove oauth state: {e}")))?;
+
+    if let Some(err) = cb.error.as_deref() {
+        tracing::info!(google_error = %err, "user denied or Google rejected consent");
+        return Ok(Redirect::to("/login?error=google").into_response());
+    }
+
+    let Some(pending) = pending else {
+        // Callback with no matching session state: someone hit /callback
+        // directly, or the session expired between clicks.
+        tracing::warn!("oauth callback without pending session state");
+        return Ok(Redirect::to("/login?error=state").into_response());
+    };
+
+    let (Some(code), Some(returned_state)) = (cb.code, cb.state) else {
+        tracing::warn!("oauth callback missing code or state param");
+        return Ok(Redirect::to("/login?error=state").into_response());
+    };
+
+    if !constant_time_eq(pending.csrf.as_bytes(), returned_state.as_bytes()) {
+        tracing::warn!("oauth callback state mismatch");
+        return Ok(Redirect::to("/login?error=state").into_response());
+    }
+
+    let token = match auth::exchange_code(&state.oauth, &state.http, code, pending.pkce_verifier)
+        .await
+    {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(error = ?e, "google token exchange failed");
+            return Ok(Redirect::to("/login?error=google").into_response());
         }
     };
 
-    // Session-fixation defense: rotate the session id when the auth state changes.
+    use oauth2::TokenResponse;
+    let info = match auth::fetch_userinfo(&state.http, token.access_token().secret()).await {
+        Ok(i) => i,
+        Err(e) => {
+            tracing::warn!(error = ?e, "google userinfo fetch failed");
+            return Ok(Redirect::to("/login?error=google").into_response());
+        }
+    };
+
+    // Allowlist gate — the only access-control decision beyond Google.
+    if !state.config.allowed_emails.contains(&info.email.to_ascii_lowercase()) {
+        tracing::warn!(email = %info.email, "sign-in blocked: not on allowlist");
+        return Ok(Redirect::to("/login?error=denied").into_response());
+    }
+
+    let user = auth::upsert_user(&state.db, &info)
+        .await
+        .map_err(AppError::Internal)?;
+
+    // Session-fixation defense: new session id on any auth-state change.
     session
         .cycle_id()
         .await
@@ -75,7 +144,7 @@ pub async fn do_login(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("session insert user: {e}")))?;
 
-    tracing::info!(user = %user.username, "login ok");
+    tracing::info!(user_id = user.id, email = %user.email, "google sign-in ok");
     Ok(Redirect::to("/").into_response())
 }
 
@@ -91,7 +160,15 @@ pub async fn do_logout(session: Session, Form(form): Form<LogoutForm>) -> AppRes
         .flush()
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("session flush: {e}")))?;
-    Ok(Redirect::to("/login").into_response())
+    Ok((StatusCode::SEE_OTHER, Redirect::to("/login")).into_response())
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    use subtle::ConstantTimeEq;
+    if a.len() != b.len() {
+        return false;
+    }
+    a.ct_eq(b).unwrap_u8() == 1
 }
 
 fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {

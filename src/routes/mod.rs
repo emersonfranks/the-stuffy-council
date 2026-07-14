@@ -12,7 +12,9 @@ use crate::state::AppState;
 pub fn router(state: AppState) -> Router {
     Router::new()
         // Public
-        .route("/login", get(auth::show_login).post(auth::do_login))
+        .route("/login", get(auth::show_login))
+        .route("/auth/google", get(auth::start_google))
+        .route("/auth/google/callback", get(auth::google_callback))
         .route("/logout", post(auth::do_logout))
         .route("/healthz", get(|| async { "ok" }))
         // Protected — the login middleware is applied inside routes we care about

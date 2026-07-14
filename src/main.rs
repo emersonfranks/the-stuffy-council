@@ -48,8 +48,6 @@ async fn main() -> Result<()> {
         .await
         .context("connecting to database")?;
 
-    maybe_bootstrap_admin(&db).await?;
-
     let cast = Arc::new(
         CastRegistry::load_from_dir("cast").context("loading cast")?,
     );
@@ -69,6 +67,18 @@ async fn main() -> Result<()> {
         config.ollama_timeout,
     )?);
     let stories = StoryService::new(generator, cast.clone());
+
+    let oauth = auth::google_client(&config).context("configuring Google OAuth client")?;
+    // Shared HTTP client used for both the token exchange (oauth2 crate) and
+    // the userinfo GET. redirect(Policy::none()) is REQUIRED per the oauth2
+    // crate's security guidance to prevent SSRF via redirect chains from the
+    // token endpoint.
+    let http = reqwest::ClientBuilder::new()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent(concat!("stuffy-council/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .context("building HTTP client for Google")?;
 
     let session_store = SqliteStore::new(db.clone());
     session_store
@@ -98,6 +108,8 @@ async fn main() -> Result<()> {
         db,
         cast,
         stories,
+        oauth,
+        http,
     };
 
     // Build the router and stack the security-header layers on top.
@@ -134,27 +146,6 @@ fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,stuffy_council=debug,tower_http=info"));
     tracing_subscriber::fmt().with_env_filter(filter).init();
-}
-
-/// If `BOOTSTRAP_ADMIN_USER` + `BOOTSTRAP_ADMIN_PASSWORD` are set on startup,
-/// upsert that account. Meant strictly for first-boot seeding — remove the env
-/// vars after the first successful login.
-async fn maybe_bootstrap_admin(db: &sqlx::SqlitePool) -> Result<()> {
-    let (Ok(user), Ok(pw)) = (
-        std::env::var("BOOTSTRAP_ADMIN_USER"),
-        std::env::var("BOOTSTRAP_ADMIN_PASSWORD"),
-    ) else {
-        return Ok(());
-    };
-    let display = std::env::var("BOOTSTRAP_ADMIN_DISPLAY_NAME").unwrap_or_else(|_| user.clone());
-    if pw.len() < 12 {
-        return Err(anyhow::anyhow!(
-            "BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters"
-        ));
-    }
-    auth::upsert_user(db, &user, &display, &pw).await?;
-    tracing::warn!(user = %user, "bootstrapped/updated user from env — unset BOOTSTRAP_ADMIN_* after first login");
-    Ok(())
 }
 
 /// Wait for Ctrl+C or SIGTERM so containers shut down cleanly.

@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -217,6 +217,70 @@ at review time.
 - why:  Documentation rule; current-state accuracy.
 - fix:  Reworded to name Lennon and Dad explicitly alongside the
   stuffies.
+- status: Fixed
+
+## 2026-07-14 — feat/google-auth
+
+- Author model:   Claude Opus 4.7 (copilot)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - Cargo.toml
+  - migrations/0002_google_auth.sql (new)
+  - src/config.rs
+  - src/auth.rs (rewritten)
+  - src/routes/auth.rs (rewritten)
+  - src/routes/mod.rs
+  - src/state.rs
+  - src/main.rs
+  - templates/login.html
+  - .env.example
+  - AGENTS.md
+  - README.md
+
+Change summary: replaced argon2 password auth with Google OAuth 2.0
+(PKCE + state) gated on a Gmail allowlist (`ALLOWED_EMAILS`). Users
+table pivots to `(email, google_sub, display_name)` via a DROP+CREATE
+migration (pre-launch, no live rows). `AppState` now carries a shared
+`reqwest::Client` (redirect Policy::none) and a typed
+`GoogleOAuthClient`. Session id rotated on successful sign-in;
+`email_verified` enforced.
+
+### Findings
+
+#### F1 — MINOR | docs | .env.example | RATE_LIMIT_PER_SECOND comment falsely claimed a stricter login limit
+- what: Comment said "Login gets a stricter limit internally" but no
+  per-login limiter exists — only the global GovernorLayer.
+- why:  Documentation rule; false security claims mislead future agents.
+- fix:  Dropped the claim. If we later want throttled login, we'll add
+  a real per-route limiter.
+- status: Fixed
+
+#### F2 — MINOR | other | src/routes/auth.rs google_callback | transient Google/network failures dumped users to a 500
+- what: `exchange_code` and `fetch_userinfo` errors mapped to
+  `AppError::Internal` (500), inconsistent with the `/login?error=google`
+  UX used for Google-returned consent errors.
+- why:  Design-intent consistency.
+- fix:  Match on each result; log the error via `tracing::warn!` and
+  redirect to `/login?error=google`. Genuine internal issues (session
+  writes, DB) still bubble up as 500.
+- status: Fixed
+
+#### F3 — MINOR | agent-authoring | src/config.rs | misplaced comment above `google_redirect_url`
+- what: A comment about `.env.example` shipping empty secret values
+  sat above `google_redirect_url`, which has no empty-check and is
+  not what the comment described.
+- why:  Comments-and-docstrings rule (comments must aid modification;
+  mis-attribution is worse than none).
+- fix:  Moved the comment above `google_client_secret` where the
+  empty-check it describes lives.
+- status: Fixed
+
+#### F4 — NIT | docs | AGENTS.md layout tree | routes/auth.rs comment stale
+- what: Layout tree showed `routes/auth.rs # /login, /logout` without
+  the new Google endpoints.
+- why:  Documentation accuracy.
+- fix:  Updated to `# /login, /auth/google (+ /callback), /logout`.
 - status: Fixed
 
 (Log grows from here.)

@@ -1,128 +1,191 @@
-//! Authentication: argon2id password hashing + session-backed login.
+//! Google OAuth 2.0 sign-in.
+//!
+//! Flow:
+//!   1. GET  /auth/google           — mint state + PKCE, stash in session, 302 to Google
+//!   2. GET  /auth/google/callback  — verify state, exchange code, fetch userinfo,
+//!                                    check allowlist, upsert user, cycle session id,
+//!                                    stash SessionUser, redirect home
+//!
+//! We deliberately do NOT validate the ID token JWT ourselves; we treat
+//! Google's TLS + a successful `userinfo` fetch (which requires the access
+//! token we just received over TLS from token_uri) as the trust anchor.
+//! `email_verified` on the userinfo response is enforced.
 
-use anyhow::{Context, Result};
-use argon2::{Algorithm, Argon2, Params, Version};
-use password_hash::{
-    PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
+use anyhow::{Context, Result, anyhow};
+use oauth2::basic::{BasicClient, BasicTokenResponse};
+use oauth2::{
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet, EndpointSet,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-/// Serialized into the session cookie. Keep small — cookie header size matters.
+use crate::config::Config;
+
+pub const SESSION_USER_KEY: &str = "user";
+pub const OAUTH_STATE_KEY: &str = "oauth_state";
+
+const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
+
+/// Session-stored identity. Kept minimal — cookie header size matters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionUser {
     pub id: i64,
-    pub username: String,
+    pub email: String,
     pub display_name: String,
 }
 
-/// Session key used consistently across the app.
-pub const SESSION_USER_KEY: &str = "user";
+/// Transient values that must survive the redirect to Google and back.
+/// Stashed in the session before we hand the browser off to Google.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PendingOAuth {
+    pub csrf: String,
+    pub pkce_verifier: String,
+}
 
-/// Argon2id with parameters strong enough for a low-QPS family site.
+/// Fully-configured oauth2 client (all four endpoints set).
 ///
-/// (~19 MiB memory, 2 iterations, 1 lane — ~50–150ms on a modern CPU.)
-fn argon2() -> Argon2<'static> {
-    let params = Params::new(19_456, 2, 1, None).expect("valid argon2 params");
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+/// The type-state on `BasicClient` reflects which endpoints are populated;
+/// we always populate auth, token, client-secret, and redirect, so the
+/// alias below is the only shape callers should see.
+pub type GoogleOAuthClient = BasicClient<
+    EndpointSet,      // auth_uri
+    EndpointNotSet,   // device_authorization_uri (unused)
+    EndpointNotSet,   // introspection_uri (unused)
+    EndpointNotSet,   // revocation_uri (unused)
+    EndpointSet,      // token_uri
+>;
+
+pub fn google_client(cfg: &Config) -> Result<GoogleOAuthClient> {
+    let client = BasicClient::new(ClientId::new(cfg.google_client_id.clone()))
+        .set_client_secret(ClientSecret::new(cfg.google_client_secret.clone()))
+        .set_auth_uri(
+            AuthUrl::new(GOOGLE_AUTH_URL.to_string()).context("hardcoded auth_url invalid")?,
+        )
+        .set_token_uri(
+            TokenUrl::new(GOOGLE_TOKEN_URL.to_string()).context("hardcoded token_url invalid")?,
+        )
+        .set_redirect_uri(
+            RedirectUrl::new(cfg.google_redirect_url.clone())
+                .context("GOOGLE_REDIRECT_URL is not a valid URL")?,
+        );
+    Ok(client)
 }
 
-pub fn hash_password(password: &str) -> Result<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = argon2()
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| anyhow::anyhow!("argon2 hash failure: {e}"))?
-        .to_string();
-    Ok(hash)
-}
-
-pub fn verify_password(password: &str, encoded_hash: &str) -> bool {
-    // Any parse error → treat as invalid credentials (constant-ish time).
-    let Ok(parsed) = PasswordHash::new(encoded_hash) else {
-        return false;
+/// Build the authorize URL + the state we need to remember while the
+/// browser is off talking to Google.
+pub fn begin_authorization(client: &GoogleOAuthClient) -> (url::Url, PendingOAuth) {
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+    let (auth_url, csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("openid".to_string()))
+        .add_scope(Scope::new("email".to_string()))
+        .add_scope(Scope::new("profile".to_string()))
+        .set_pkce_challenge(pkce_challenge)
+        .url();
+    let pending = PendingOAuth {
+        csrf: csrf_token.secret().clone(),
+        pkce_verifier: pkce_verifier.secret().clone(),
     };
-    argon2()
-        .verify_password(password.as_bytes(), &parsed)
-        .is_ok()
+    (auth_url, pending)
 }
 
-#[derive(Debug, sqlx::FromRow)]
-struct UserRow {
-    id: i64,
-    username: String,
-    display_name: String,
-    password_hash: String,
-}
-
-/// Look up a user and verify their password in one shot.
+/// Exchange the authorization code from the callback for an access token.
 ///
-/// Returns `Ok(None)` for both "no such user" and "wrong password" so callers
-/// can render a single generic error message — never leak which case it was.
-pub async fn authenticate(
-    pool: &SqlitePool,
-    username: &str,
-    password: &str,
-) -> Result<Option<SessionUser>> {
-    let row: Option<UserRow> = sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, display_name, password_hash FROM users WHERE username = ?1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await
-    .context("querying user")?;
+/// The `http_client` MUST be configured with `redirect(reqwest::redirect::Policy::none())`
+/// per the oauth2 crate's security guidance — otherwise a malicious token endpoint
+/// could redirect us to an attacker-controlled host.
+pub async fn exchange_code(
+    client: &GoogleOAuthClient,
+    http_client: &reqwest::Client,
+    code: String,
+    pkce_verifier: String,
+) -> Result<BasicTokenResponse> {
+    client
+        .exchange_code(AuthorizationCode::new(code))
+        .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier))
+        .request_async(http_client)
+        .await
+        .context("Google token exchange failed")
+}
 
-    let Some(row) = row else {
-        // Waste a hash to keep timing similar to the found-user path.
-        let _ = verify_password(password, dummy_hash());
-        return Ok(None);
-    };
+/// Google's OIDC userinfo response subset we actually use.
+#[derive(Debug, Deserialize)]
+pub struct GoogleUserInfo {
+    pub sub: String,
+    pub email: String,
+    #[serde(default)]
+    pub email_verified: bool,
+    /// Google returns `name` as the display name (concatenated given + family
+    /// with locale awareness). Falls back to email if for some reason absent.
+    #[serde(default)]
+    pub name: Option<String>,
+}
 
-    if !verify_password(password, &row.password_hash) {
-        return Ok(None);
+pub async fn fetch_userinfo(
+    http_client: &reqwest::Client,
+    access_token: &str,
+) -> Result<GoogleUserInfo> {
+    let info: GoogleUserInfo = http_client
+        .get(GOOGLE_USERINFO_URL)
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .context("calling Google userinfo endpoint")?
+        .error_for_status()
+        .context("Google userinfo returned non-2xx")?
+        .json()
+        .await
+        .context("decoding Google userinfo body")?;
+    if !info.email_verified {
+        return Err(anyhow!(
+            "Google reports email `{}` as unverified; refusing to sign in",
+            info.email
+        ));
     }
-
-    Ok(Some(SessionUser {
-        id: row.id,
-        username: row.username,
-        display_name: row.display_name,
-    }))
+    Ok(info)
 }
 
-/// Cached argon2 hash of a throwaway string, used only to burn similar CPU
-/// on the "no such user" branch so a timing side channel cannot enumerate
-/// valid usernames. Computed once, on first miss.
-fn dummy_hash() -> &'static str {
-    use std::sync::LazyLock;
-    static DUMMY: LazyLock<String> = LazyLock::new(|| {
-        hash_password("invalid-placeholder-not-a-real-password")
-            .expect("argon2 hashing should never fail with valid params")
-    });
-    DUMMY.as_str()
-}
-
-/// Insert or update a user with the given plaintext password.
+/// Insert or update the user row keyed by `google_sub`, and return the
+/// SessionUser payload the caller stashes in the session.
 ///
-/// This is used by the bootstrap CLI/env-var seed flow — never by public
-/// HTTP endpoints.
-pub async fn upsert_user(
-    pool: &SqlitePool,
-    username: &str,
-    display_name: &str,
-    password: &str,
-) -> Result<()> {
-    let hash = hash_password(password)?;
+/// Keying on `google_sub` (rather than email) means an allowed user who
+/// legitimately changes their Gmail address on Google's side stays the
+/// same row; the email column is updated in place.
+pub async fn upsert_user(pool: &SqlitePool, info: &GoogleUserInfo) -> Result<SessionUser> {
+    let display = info.name.clone().unwrap_or_else(|| info.email.clone());
+    let email_lower = info.email.to_ascii_lowercase();
+
     sqlx::query(
-        "INSERT INTO users (username, display_name, password_hash)
-         VALUES (?1, ?2, ?3)
-         ON CONFLICT(username) DO UPDATE SET
+        "INSERT INTO users (email, google_sub, display_name, last_login_at)
+         VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+         ON CONFLICT(google_sub) DO UPDATE SET
+             email = excluded.email,
              display_name = excluded.display_name,
-             password_hash = excluded.password_hash",
+             last_login_at = excluded.last_login_at",
     )
-    .bind(username)
-    .bind(display_name)
-    .bind(hash)
+    .bind(&email_lower)
+    .bind(&info.sub)
+    .bind(&display)
     .execute(pool)
     .await
-    .context("upserting user")?;
-    Ok(())
+    .context("upserting user on Google login")?;
+
+    // Fetch the row to get the id; we cannot rely on `last_insert_rowid`
+    // because the ON CONFLICT path doesn't produce one.
+    let row: (i64, String, String) = sqlx::query_as(
+        "SELECT id, email, display_name FROM users WHERE google_sub = ?1",
+    )
+    .bind(&info.sub)
+    .fetch_one(pool)
+    .await
+    .context("re-reading user row after upsert")?;
+
+    Ok(SessionUser {
+        id: row.0,
+        email: row.1,
+        display_name: row.2,
+    })
 }

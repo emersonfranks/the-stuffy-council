@@ -29,21 +29,21 @@ open-source LLM (Ollama) for the story text.
 ```bash
 # 1. Config
 cp .env.example .env
-# Edit .env — at minimum set SESSION_SECRET to 64+ random bytes.
-#   Bash:  openssl rand -hex 64
-#   PowerShell: -join ((1..96) | %{[char](Get-Random -Min 33 -Max 126)})
+# Edit .env — at minimum:
+#  * SESSION_SECRET to 64+ random bytes (`openssl rand -hex 64`).
+#  * GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET from a Google Cloud Console
+#    OAuth 2.0 Web-application credential. Add
+#    http://127.0.0.1:8080/auth/google/callback as an authorized
+#    redirect URI in that credential.
+#  * ALLOWED_EMAILS listing every Gmail address permitted to sign in.
 
 # 2. Start Ollama in another terminal
 ollama serve
 
-# 3. Seed the first user (once), then start normally
-BOOTSTRAP_ADMIN_USER=emerson \
-BOOTSTRAP_ADMIN_PASSWORD='choose-a-real-passphrase' \
-cargo run
-# Ctrl+C, then:
+# 3. Run the app
 cargo run
 
-# 4. Open http://127.0.0.1:8080 and sign in.
+# 4. Open http://127.0.0.1:8080, click 'Sign in with Google'.
 ```
 
 ## What's here
@@ -61,10 +61,14 @@ cargo run
 
 ## Security posture (day one)
 
-* **Argon2id** for password hashing (~19 MiB memory cost).
+* **Google OAuth 2.0** with PKCE for sign-in; no local passwords.
+* **Email allowlist** (`ALLOWED_EMAILS` env var) is the sole gate after
+  a successful Google round-trip. Google reports `email_verified` —
+  we require it.
 * **Server-side sessions** (SQLite store); cookie carries only an opaque id.
 * **Session id rotation on login** to defeat session fixation.
-* **CSRF tokens** on every POST (double-submit against the session).
+* **CSRF tokens** on every POST (double-submit against the session);
+  OAuth callback state + PKCE covers the sign-in redirect path.
 * **CSP + `X-Content-Type-Options` + `X-Frame-Options` + `Referrer-Policy`
   + `Permissions-Policy`** on every response.
 * **HSTS** in production only (never over plain HTTP).

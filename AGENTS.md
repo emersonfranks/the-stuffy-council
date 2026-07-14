@@ -33,7 +33,7 @@ The running review log lives at
 | Templates          | `askama` 0.14 (compile-time, escapes by default) |
 | Storage            | SQLite via `sqlx` 0.8 (WAL, foreign keys on) |
 | Sessions           | `tower-sessions` + `tower-sessions-sqlx-store` (server-side) |
-| Auth               | `argon2id` password hashing (`argon2` 0.5) |
+| Auth               | Google OAuth 2.0 (`oauth2` 5) + allowlist   |
 | LLM                | Ollama HTTP API (`/api/generate`, `stream=false`) |
 | Rate limiting      | `tower_governor` per client IP             |
 | Styling            | Tailwind (CDN for now — vendor before production) |
@@ -46,7 +46,7 @@ src/
   main.rs           # boot: config, DB, generator, layers, serve
   config.rs         # env parsing, fails loud
   db.rs             # SQLite pool + migrations
-  auth.rs           # argon2 hash/verify, session user model
+  auth.rs           # Google OAuth client, SessionUser, upsert_user
   error.rs          # single AppError enum + IntoResponse
   state.rs          # AppState passed to handlers
   cast.rs           # CastRegistry (loads cast/*.toml — stuffies + humans)
@@ -56,7 +56,7 @@ src/
     ollama.rs       # Ollama impl
   routes/
     mod.rs          # Router assembly
-    auth.rs         # /login, /logout
+    auth.rs         # /login, /auth/google (+ /callback), /logout
     home.rs         # /, /story/today
     characters.rs   # /council, /council/{id}
   web/
@@ -103,14 +103,23 @@ cp .env.example .env
 #   Bash:                openssl rand -hex 64
 # Paste it into SESSION_SECRET.
 
+# Google OAuth setup (one-time):
+#   1. https://console.cloud.google.com/ → pick a project (or create one).
+#   2. APIs & Services → Credentials → Create Credentials → OAuth client ID.
+#   3. Application type: Web application.
+#   4. Authorized redirect URIs: http://127.0.0.1:8080/auth/google/callback
+#      (add your production URL too when you deploy).
+#   5. Copy the client ID + secret into GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
+#   6. Put your Gmail(s) into ALLOWED_EMAILS — anyone else is rejected after the
+#      Google round-trip.
+
 # Start Ollama (separately) and pull a model:
 ollama serve                              # in another terminal
 ollama pull llama3.1:8b-instruct-q4_K_M
 
-# First-run: seed an admin user via env vars, run once, then unset them.
-BOOTSTRAP_ADMIN_USER=emerson BOOTSTRAP_ADMIN_PASSWORD='pick-something-long' cargo run
-# ...then Ctrl+C, unset the env vars, and start normally:
+# Run the app:
 cargo run
+# → http://127.0.0.1:8080 → sign in with a Google account on the allowlist
 ```
 
 ## Deploy target — Azure Container Apps
@@ -135,9 +144,9 @@ cargo run
 malformed TOML or dangling `relationships[].with` references will
 fail the boot loudly.
 
-**Add a new user**: for now, restart with `BOOTSTRAP_ADMIN_USER` and
-`BOOTSTRAP_ADMIN_PASSWORD` set; the app upserts on boot. A tiny admin CLI
-is a natural next task.
+**Add a new user**: append their Gmail address to `ALLOWED_EMAILS` in
+the environment and restart. The `users` row is created on their first
+successful Google sign-in.
 
 **Change the model**: set `OLLAMA_MODEL` in the environment and restart.
 The `model` column on cached stories records which model produced each,
