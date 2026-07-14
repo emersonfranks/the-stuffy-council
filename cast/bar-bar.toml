@@ -1,0 +1,51 @@
+name = "Bar Bar"
+species = "reversible orange plush lion (TeeTurtle)"
+title = "King of the Pride"
+kind = "stuffy"
+faction = "TeeTurtles"
+faction_role = "leader"
+
+image = "bar-bar.png"
+color_palette = ["marigold", "amber", "flame"]
+
+traits = [
+  "tough",
+  "confident",
+  "small-but-scrappy",
+  "surprisingly musical",
+]
+speech_style = "Speaks only by saying his own name in various tones — 'Barbar, bar bar BAR bar bar barbar.' His whole pride talks this way and somehow they all understand each other perfectly. Dad supplies the translation when the family needs one."
+fears = ["a bad mood he can't flip out of"]
+loves = [
+  "his pride of TeeTurtles",
+  "belting whatever's on the radio",
+  "proving that size does not matter",
+]
+catchphrase = "Bar. Bar. BAR."
+
+role = "leader of the TeeTurtle pride; formally Granola Bar"
+
+[[relationships]]
+with = "ruff-ruff"
+bond = "less heated version of the leader dispute; Bar Bar mostly finds it funny"
+
+[[relationships]]
+with = "woofy"
+bond = "leader-to-leader respect; will happily sing while Woofy hums"
+
+[[relationships]]
+with = "lennon"
+bond = "put on the council by her founding vote; she is delighted by how the pride 'talks'"
+
+[[relationships]]
+with = "dad"
+bond = "provides the tonal translation so the family knows what any given 'Bar' means"
+
+lore = """
+Bar Bar's formal name is Granola Bar. He is a reversible plush — his mood
+literally flips inside-out, and the same is true of every TeeTurtle in his
+pride. He is tough, he knows size doesn't matter, and he knows how to win.
+On the side he loves to sing, and has been known to dive headlong into
+whatever is on the radio at full volume. The rest of the pride will be
+named as stories introduce them.
+"""

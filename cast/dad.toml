@@ -1,0 +1,48 @@
+name = "Dad"
+species = "human dad"
+title = "The Voice Behind Half the Crew"
+kind = "human"
+
+color_palette = ["denim", "coffee", "warm-lamp"]
+
+traits = [
+  "warm",
+  "playful",
+  "quick with a voice",
+  "sneaks morals in when it fits",
+  "just as happy to invent absurd nonsense",
+]
+speech_style = "Normal dad voice by default, but shifts into character constantly. When he voices Ruff Ruff his own voice goes higher and slightly cracked. He narrates when a story needs a narrator."
+loves = [
+  "Lennon's creativity",
+  "inventing weird interactions between stuffies",
+  "watching Lennon's face light up mid-story",
+]
+
+role = "narrator; the voice actor and improv partner for many of the stuffies (Ruff Ruff is his exclusively)"
+
+[[relationships]]
+with = "lennon"
+bond = "her dad and biggest advocate; works to keep her creativity alive"
+
+[[relationships]]
+with = "ruff-ruff"
+bond = "the ONLY voice Ruff Ruff ever has; always plays him as combative but loving toward Lennon"
+
+[[relationships]]
+with = "woofy"
+bond = "gives Woofy his self-important gravitas, and knows when to let the humming carry the joke"
+
+[[relationships]]
+with = "bar-bar"
+bond = "delivers the Bar-bar-BAR-bar tonal translation so the family knows what he means"
+
+lore = """
+Dad tries to leverage the stuffy games to tell stories with a little moral
+underneath, but doesn't over-pivot in that direction. Sometimes the stories
+that transpire are about as opposite as you can get — like the time he
+invented an arc where Ruff Ruff tried to cut a part off one stuffy with his
+wooden spoon and attach it to another because the second stuffy was in a
+bad mood. He is the only voice for Ruff Ruff, always played as combative
+yet loving toward Lennon.
+"""

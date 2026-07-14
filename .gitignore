@@ -1,0 +1,30 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Local databases (SQLite dev files)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+
+# Environment / secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Generated artifacts we may produce later (rendered images, cached stories on disk, etc.)
+/data/
+/generated/

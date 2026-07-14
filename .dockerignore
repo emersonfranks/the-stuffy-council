@@ -1,0 +1,12 @@
+# Ignore everything by default so we don't accidentally COPY secrets, IDE
+# state, or the local dev DB into the image.
+*
+
+# Then explicitly allow only what the build actually needs.
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!src/**
+!templates/**
+!cast/**
+!migrations/**

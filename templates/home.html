@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}The Stuffy Council{% endblock %}
+
+{% block header %}
+<header class="flex items-baseline justify-between">
+  <div>
+    <h1 class="text-3xl font-semibold text-slate-800">The Stuffy Council</h1>
+    <p class="text-sm text-slate-500">Hello, {{ display_name }}.</p>
+  </div>
+  <nav class="text-sm space-x-4">
+    <a href="/council" class="text-violet-600 hover:underline">Meet the council</a>
+    <form method="post" action="/logout" class="inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}" />
+      <button type="submit" class="text-slate-500 hover:text-slate-800">Sign out</button>
+    </form>
+  </nav>
+</header>
+{% endblock %}
+
+{% block content %}
+<section class="rounded-2xl bg-white/70 backdrop-blur border border-white shadow-md p-8">
+  <p class="text-sm uppercase tracking-wide text-violet-500">Today &middot; {{ today_iso }}</p>
+  {% if has_today %}
+    <h2 class="mt-2 text-2xl font-semibold text-slate-800">{{ today_title }}</h2>
+    <p class="mt-3 text-slate-600">Today&rsquo;s story is ready.</p>
+    <a
+      href="/story/today"
+      class="mt-6 inline-block rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium py-2 px-4 shadow-sm transition"
+    >Read today&rsquo;s story</a>
+  {% else %}
+    <h2 class="mt-2 text-2xl font-semibold text-slate-800">A fresh story is waiting</h2>
+    <p class="mt-3 text-slate-600">
+      The council hasn&rsquo;t written today&rsquo;s tale yet. Tap below and one of them will draft
+      it for you.
+    </p>
+    <a
+      href="/story/today"
+      class="mt-6 inline-block rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium py-2 px-4 shadow-sm transition"
+    >Generate today&rsquo;s story</a>
+  {% endif %}
+</section>
+{% endblock %}

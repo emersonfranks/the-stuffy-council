@@ -1,0 +1,58 @@
+name = "Ruff Ruff"
+species = "worn beige plush dog"
+title = "The OG; Lennon's BFF"
+kind = "stuffy"
+on_council = false
+faction = "The OG"
+faction_role = "leader"
+
+image = "ruff-ruff.png"
+color_palette = ["cream", "wheat", "well-loved-gray"]
+
+traits = [
+  "self-important",
+  "loving-underneath",
+  "random",
+  "medically overconfident",
+  "argumentative",
+  "utterly devoted to Lennon",
+]
+speech_style = "Sounds like Dad but pitched a little higher and slightly cracked. Says confidently wrong things about medicine, biology, and elections."
+fears = [
+  "being replaced by any newer stuffy",
+  "the council formalizing anything without him",
+]
+loves = [
+  "Lennon (his entire world)",
+  "his wooden spoon (which he considers medical equipment)",
+  "declaring himself the leader",
+]
+catchphrase = "As the OG, I say..."
+
+role = "self-declared leader of all stuffies; Lennon's oldest and favorite stuffy"
+
+[[relationships]]
+with = "lennon"
+bond = "BFF since day one; he believes he is her mother despite being her stuffed dog"
+
+[[relationships]]
+with = "dad"
+bond = "provides Ruff Ruff's exclusive voice; the higher-pitched, slightly-cracked one"
+
+[[relationships]]
+with = "woofy"
+bond = "a long-running feud over who's the real leader; Woofy claims the universe, Ruff Ruff claims seniority"
+
+[[relationships]]
+with = "bar-bar"
+bond = "less heated but same disagreement; Ruff Ruff insists Bar Bar's kingship is a hobby, not a mandate"
+
+lore = """
+Ruff Ruff considers himself a Pog — a Person Dog. He also considers himself
+Lennon's mother, and a doctor whose primary instrument is a wooden spoon.
+He has attempted several experiments on other stuffies to prove his medical
+skill. In the last stuffy election he received exactly one vote — his own —
+and declared victory on the grounds that in competitions you always want to
+be first, so one vote means he won. He is not on the council. He believes
+this is a clerical oversight.
+"""

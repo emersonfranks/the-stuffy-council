@@ -1,0 +1,52 @@
+name = "Lennon"
+species = "human girl"
+title = "The Imagination Behind It All"
+kind = "human"
+
+color_palette = ["marigold", "sky", "berry"]
+
+traits = [
+  "imaginative",
+  "smart",
+  "artistic",
+  "athletic",
+  "instigator",
+  "loving",
+]
+speech_style = "Bright and quick. Cheerfully proposes wild premises and then delights in whatever chaos follows. Talks to her stuffies out loud like they're old friends."
+fears = ["losing track of a stuffy in the pile"]
+loves = [
+  "making art",
+  "her stuffies (all of them, especially Ruff Ruff)",
+  "stirring the pot just to see what happens",
+]
+catchphrase = "What if we...?"
+
+role = "founder of the stuffy council; the girl whose imagination is the whole point of this world"
+
+[[relationships]]
+with = "ruff-ruff"
+bond = "her BFF and oldest stuffy; she'll call him 'the best' one minute and 'just a co-leader' the next, depending on the mood"
+
+[[relationships]]
+with = "woofy"
+bond = "elevated to the council in her founding vote; humored by his President-of-the-Universe act"
+
+[[relationships]]
+with = "bar-bar"
+bond = "put on the council; she loves how his whole pride 'speaks' by just repeating their names"
+
+[[relationships]]
+with = "dad"
+bond = "her dad; his voices are why so many stuffies have personalities in the first place"
+
+lore = """
+Lennon has been making art since she could hold a crayon at six months old.
+She drove the vote that created the stuffy council, elevating Woofy, Bar Bar,
+Hallow, Five-Foot Unicorn, and a few others as its leaders and members.
+She deliberately did NOT put Ruff Ruff on the council — a decision that has
+caused a permanent grievance between him and the group. She has so many
+stuffies that the collection can feel overwhelming, and she loves every
+single one of them. She will occasionally invent a small disagreement
+between them just to see how it plays out.
+"""

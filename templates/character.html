@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ character.name }} — The Stuffy Council{% endblock %}
+
+{% block header %}
+<header>
+  <a href="/council" class="text-sm text-violet-600 hover:underline">&larr; The Crew</a>
+</header>
+{% endblock %}
+
+{% block content %}
+<article class="rounded-2xl bg-white/80 backdrop-blur border border-white shadow-md p-8">
+  <h1 class="text-3xl font-semibold text-slate-800">{{ character.name }}</h1>
+  <p class="text-xs uppercase tracking-wide text-violet-500 mt-1">{{ character.species }}</p>
+  <p class="mt-1 text-slate-600">{{ character.title }}</p>
+
+  <dl class="mt-6 space-y-4 text-sm">
+    <div>
+      <dt class="font-semibold text-slate-700">Role</dt>
+      <dd class="text-slate-600">{{ character.role }}</dd>
+    </div>
+    {% match character.faction %}
+      {% when Some with (f) %}
+        <div>
+          <dt class="font-semibold text-slate-700">Faction</dt>
+          <dd class="text-slate-600">
+            {{ f }}{% match character.faction_role %}{% when Some with (fr) %} &middot; <span class="italic">{{ fr }}</span>{% when None %}{% endmatch %}
+            {% if !character.on_council %}<span class="ml-2 inline-block bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 text-xs">not on the council</span>{% endif %}
+          </dd>
+        </div>
+      {% when None %}
+        {% if !character.on_council %}
+          <div>
+            <dt class="font-semibold text-slate-700">Council</dt>
+            <dd class="text-slate-600"><span class="inline-block bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 text-xs">not on the council</span></dd>
+          </div>
+        {% endif %}
+    {% endmatch %}
+    <div>
+      <dt class="font-semibold text-slate-700">Traits</dt>
+      <dd class="text-slate-600">
+        {% for t in character.traits %}<span class="inline-block bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 mr-1">{{ t }}</span>{% endfor %}
+      </dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-slate-700">Speech style</dt>
+      <dd class="text-slate-600">{{ character.speech_style }}</dd>
+    </div>
+    {% if !character.loves.is_empty() %}
+    <div>
+      <dt class="font-semibold text-slate-700">Loves</dt>
+      <dd class="text-slate-600">{{ character.loves|join(", ") }}</dd>
+    </div>
+    {% endif %}
+    {% if !character.fears.is_empty() %}
+    <div>
+      <dt class="font-semibold text-slate-700">Fears</dt>
+      <dd class="text-slate-600">{{ character.fears|join(", ") }}</dd>
+    </div>
+    {% endif %}
+    {% match character.catchphrase %}
+      {% when Some with (cp) %}
+        <div>
+          <dt class="font-semibold text-slate-700">Catchphrase</dt>
+          <dd class="text-slate-600 italic">&ldquo;{{ cp }}&rdquo;</dd>
+        </div>
+      {% when None %}
+    {% endmatch %}
+    {% if !character.relationships.is_empty() %}
+    <div>
+      <dt class="font-semibold text-slate-700">Relationships</dt>
+      <dd class="text-slate-600">
+        <ul class="mt-1 space-y-1">
+          {% for r in character.relationships %}
+            <li><span class="font-medium">{{ r.with }}:</span> {{ r.bond }}</li>
+          {% endfor %}
+        </ul>
+      </dd>
+    </div>
+    {% endif %}
+    {% match character.lore %}
+      {% when Some with (lore) %}
+        <div>
+          <dt class="font-semibold text-slate-700">Lore</dt>
+          <dd class="text-slate-600 whitespace-pre-line">{{ lore }}</dd>
+        </div>
+      {% when None %}
+    {% endmatch %}
+  </dl>
+</article>
+{% endblock %}

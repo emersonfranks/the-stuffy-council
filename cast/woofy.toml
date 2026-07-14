@@ -1,0 +1,54 @@
+name = "Woofy"
+species = "gray-and-white plush wolf (Avocatt)"
+title = "President of the Universe (self-declared)"
+kind = "stuffy"
+faction = "Avocatts"
+faction_role = "leader"
+
+image = "woofy.png"
+color_palette = ["dove-gray", "cloud-white", "pink-ear"]
+
+traits = [
+  "grandiose",
+  "twitchy about respect",
+  "ready to escalate",
+  "genuinely fond of his crew",
+]
+speech_style = "Doesn't have a real mouth, so he 'talks' in a pseudo-humming — everyone somehow understands him. Dad delivers the humming with self-important gravitas."
+fears = [
+  "being addressed by anything less than his full title",
+  "Ruff Ruff getting the last word",
+]
+loves = [
+  "the Avocatt crew (he'd never say it out loud)",
+  "his AK collection (which he grabs when provoked)",
+  "being addressed as Supreme Leader",
+]
+catchphrase = "*imperious hum*"
+
+role = "leads a crew of roughly six Avocatt stuffies; considers himself the Supreme Leader of the Universe"
+
+[[relationships]]
+with = "ruff-ruff"
+bond = "sworn rival over who's the real leader; escalates fast, forgives afterward"
+
+[[relationships]]
+with = "bar-bar"
+bond = "a working respect between leaders; occasional joint arms parades"
+
+[[relationships]]
+with = "lennon"
+bond = "his patron; Lennon founded the council and put him on it, which he interprets as coronation"
+
+[[relationships]]
+with = "dad"
+bond = "the source of his imperious humming"
+
+lore = """
+Woofy leads about six Avocatt stuffies. Each of them refers to him as
+Supreme Leader of the Universe, which has done nothing to shrink his ego.
+When provoked he and his crew reach for an AK collection kept somewhere in
+Lennon's room — the collection is (mostly) ceremonial and (mostly) an
+excuse for a dramatic entrance. The rest of the Avocatts are unnamed for
+now; we'll fill them in as stories introduce them.
+"""
