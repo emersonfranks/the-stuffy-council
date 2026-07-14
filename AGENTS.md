@@ -110,40 +110,28 @@ docs/
 
 ## Local dev
 
+Fresh machine → running story: follow the full runbook at
+[docs/dev-setup.md](docs/dev-setup.md). It covers Rust, Ollama, the
+Google OAuth client id, `.env`, the allowlist, and a per-step verify +
+troubleshooting table.
+
+Already set up (toolchain + Ollama present, `.env` filled)? Just:
+
 ```bash
-cp .env.example .env
-# Generate a real session secret:
-#   Windows PowerShell:  -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 96 | % {[char]$_})
-#   Bash:                openssl rand -hex 64
-# Paste it into SESSION_SECRET.
-
-# Google sign-in setup (one-time):
-#   Auth is delegated to Google Identity Services (client-side). Our server
-#   only holds a PUBLIC client_id; there is NO client secret in this project.
-#   1. https://console.cloud.google.com/ → pick a project (or create one).
-#   2. APIs & Services → Credentials → Create Credentials → OAuth client ID.
-#   3. Application type: Web application.
-#   4. Authorized JavaScript origins:
-#        Dev:  http://localhost:8080
-#        Prod: https://<your-domain>
-#   5. Authorized redirect URIs (this is where GIS POSTs the ID token JWT):
-#        Dev:  http://localhost:8080/auth/google/verify
-#        Prod: https://<your-domain>/auth/google/verify
-#   6. Copy the Client ID into GOOGLE_CLIENT_ID. Ignore the client secret —
-#      GIS does not use it and we never store it.
-#   7. Make sure your Gmail is in `authorized-users.toml` at the repo root — anyone
-#      not listed there is rejected after the Google round-trip.
-
-# Start Ollama (separately) and pull a model:
-ollama serve                              # in another terminal
-ollama pull llama3.1:8b-instruct-q4_K_M
-
-# Run the app:
-cargo run
-# → http://localhost:8080  (use `localhost`, NOT 127.0.0.1 — Google GIS
-#   only allows plain HTTP on the literal `localhost` hostname)
-# → sign in with a Google account listed in authorized-users.toml
+cargo run   # → http://localhost:8080 (use `localhost`, NOT 127.0.0.1 —
+            #   Google GIS only allows plain HTTP on the literal `localhost`)
 ```
+
+Key facts the runbook expands on:
+
+* `SESSION_SECRET` must be 64+ chars (`openssl rand -hex 64`).
+* `GOOGLE_CLIENT_ID` is the PUBLIC OAuth Web-application client id; there
+  is NO client secret in this project.
+* Sign in with a Gmail listed in `authorized-users.toml` (edit + PR).
+* On Windows the Ollama installer runs the server as a background service
+  — do NOT also run `ollama serve` (port clash).
+* Never edit an applied migration; if you hit
+  `migration N ... has been modified`, reset the dev DB per the runbook.
 
 ## Deploy target — Azure Container Apps
 
