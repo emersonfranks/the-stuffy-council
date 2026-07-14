@@ -3,7 +3,6 @@
 //! We fail loud at startup if anything required is missing or nonsensical —
 //! misconfiguration should never be a runtime surprise.
 
-use std::collections::BTreeSet;
 use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -33,10 +32,6 @@ pub struct Config {
     pub google_client_id: String,
     pub google_client_secret: String,
     pub google_redirect_url: String,
-    /// Lowercased, whitespace-trimmed set of Gmail addresses permitted to
-    /// sign in. Membership is the ONLY gate after a successful Google
-    /// round-trip. Empty set means no one can sign in.
-    pub allowed_emails: BTreeSet<String>,
     pub ollama_url: String,
     pub ollama_model: String,
     pub ollama_timeout: Duration,
@@ -99,18 +94,6 @@ impl Config {
         let google_redirect_url = env::var("GOOGLE_REDIRECT_URL")
             .unwrap_or_else(|_| format!("{public_origin}/auth/google/callback"));
 
-        let allowed_emails: BTreeSet<String> = env::var("ALLOWED_EMAILS")
-            .unwrap_or_default()
-            .split(',')
-            .map(|s| s.trim().to_ascii_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if env == Environment::Production && allowed_emails.is_empty() {
-            return Err(anyhow!(
-                "ALLOWED_EMAILS must list at least one address in production"
-            ));
-        }
-
         let ollama_url = env::var("OLLAMA_URL").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
         let ollama_model =
             env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.1:8b-instruct-q4_K_M".into());
@@ -138,7 +121,6 @@ impl Config {
             google_client_id,
             google_client_secret,
             google_redirect_url,
-            allowed_emails,
             ollama_url,
             ollama_model,
             ollama_timeout,

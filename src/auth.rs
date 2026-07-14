@@ -35,6 +35,11 @@ pub struct SessionUser {
     pub id: i64,
     pub email: String,
     pub display_name: String,
+    /// True when the signed-in user has `admin = true` in
+    /// `authorized-users.toml`. Persisted on the session, not the DB row —
+    /// the source of truth is the committed file, checked at each sign-in.
+    #[serde(default)]
+    pub admin: bool,
 }
 
 /// Transient values that must survive the redirect to Google and back.
@@ -151,10 +156,16 @@ pub async fn fetch_userinfo(
 /// Insert or update the user row keyed by `google_sub`, and return the
 /// SessionUser payload the caller stashes in the session.
 ///
+/// `admin` comes from the caller's `AccessList` lookup, not from Google.
+///
 /// Keying on `google_sub` (rather than email) means an allowed user who
 /// legitimately changes their Gmail address on Google's side stays the
 /// same row; the email column is updated in place.
-pub async fn upsert_user(pool: &SqlitePool, info: &GoogleUserInfo) -> Result<SessionUser> {
+pub async fn upsert_user(
+    pool: &SqlitePool,
+    info: &GoogleUserInfo,
+    admin: bool,
+) -> Result<SessionUser> {
     let display = info.name.clone().unwrap_or_else(|| info.email.clone());
     let email_lower = info.email.to_ascii_lowercase();
 
@@ -187,5 +198,6 @@ pub async fn upsert_user(pool: &SqlitePool, info: &GoogleUserInfo) -> Result<Ses
         id: row.0,
         email: row.1,
         display_name: row.2,
+        admin,
     })
 }

@@ -35,7 +35,8 @@ cp .env.example .env
 #    OAuth 2.0 Web-application credential. Add
 #    http://127.0.0.1:8080/auth/google/callback as an authorized
 #    redirect URI in that credential.
-#  * ALLOWED_EMAILS listing every Gmail address permitted to sign in.
+# Then edit `authorized-users.toml` at the repo root and add your Gmail
+# address (commit + PR for teammates; ship as one). No env-var allowlist.
 
 # 2. Start Ollama in another terminal
 ollama serve
@@ -62,9 +63,10 @@ cargo run
 ## Security posture (day one)
 
 * **Google OAuth 2.0** with PKCE for sign-in; no local passwords.
-* **Email allowlist** (`ALLOWED_EMAILS` env var) is the sole gate after
-  a successful Google round-trip. Google reports `email_verified` —
-  we require it.
+* **Email allowlist** (`authorized-users.toml`, committed at the repo
+  root) is the sole gate after a successful Google round-trip. Google
+  reports `email_verified` — we require it. Adding or removing a user
+  is a PR.
 * **Server-side sessions** (SQLite store); cookie carries only an opaque id.
 * **Session id rotation on login** to defeat session fixation.
 * **CSRF tokens** on every POST (double-submit against the session);

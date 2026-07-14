@@ -50,6 +50,7 @@ src/
   error.rs          # single AppError enum + IntoResponse
   state.rs          # AppState passed to handlers
   cast.rs           # CastRegistry (loads cast/*.toml — stuffies + humans)
+  access.rs         # AccessList (loads authorized-users.toml)
   story_repo.rs     # cache read/write for the per-day story
   stories/
     mod.rs          # StoryGenerator trait, StoryService, prompt builder
@@ -65,6 +66,7 @@ src/
 
 templates/          # Askama .html templates (extend base.html)
 cast/               # One TOML per character (stuffies + humans); filename = stable id
+authorized-users.toml  # Committed allowlist (email + admin flag)
 migrations/         # sqlx migrations, applied on startup
 ```
 
@@ -110,8 +112,8 @@ cp .env.example .env
 #   4. Authorized redirect URIs: http://127.0.0.1:8080/auth/google/callback
 #      (add your production URL too when you deploy).
 #   5. Copy the client ID + secret into GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
-#   6. Put your Gmail(s) into ALLOWED_EMAILS — anyone else is rejected after the
-#      Google round-trip.
+#   6. Make sure your Gmail is in `authorized-users.toml` at the repo root — anyone
+#      not listed there is rejected after the Google round-trip.
 
 # Start Ollama (separately) and pull a model:
 ollama serve                              # in another terminal
@@ -144,9 +146,9 @@ cargo run
 malformed TOML or dangling `relationships[].with` references will
 fail the boot loudly.
 
-**Add a new user**: append their Gmail address to `ALLOWED_EMAILS` in
-the environment and restart. The `users` row is created on their first
-successful Google sign-in.
+**Add a new user**: add a `[[users]]` block to `authorized-users.toml`
+at the repo root, commit, open a PR. The row in the `users` table is
+created on their first successful Google sign-in.
 
 **Change the model**: set `OLLAMA_MODEL` in the environment and restart.
 The `model` column on cached stories records which model produced each,

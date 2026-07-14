@@ -125,12 +125,13 @@ pub async fn google_callback(
     };
 
     // Allowlist gate — the only access-control decision beyond Google.
-    if !state.config.allowed_emails.contains(&info.email.to_ascii_lowercase()) {
+    let Some(entry) = state.access.check(&info.email) else {
         tracing::warn!(email = %info.email, "sign-in blocked: not on allowlist");
         return Ok(Redirect::to("/login?error=denied").into_response());
-    }
+    };
+    let admin = entry.admin;
 
-    let user = auth::upsert_user(&state.db, &info)
+    let user = auth::upsert_user(&state.db, &info, admin)
         .await
         .map_err(AppError::Internal)?;
 

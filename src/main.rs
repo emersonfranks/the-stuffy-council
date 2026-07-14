@@ -1,5 +1,6 @@
 //! Stuffy Council — daily generative bedtime stories.
 
+mod access;
 mod auth;
 mod cast;
 mod config;
@@ -28,6 +29,7 @@ use tower_sessions::cookie::time as ttime;
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::SqliteStore;
 
+use crate::access::AccessList;
 use crate::cast::CastRegistry;
 use crate::config::Config;
 use crate::state::AppState;
@@ -60,6 +62,12 @@ async fn main() -> Result<()> {
             "not enough stuffies to generate a story yet"
         );
     }
+
+    let access = Arc::new(
+        AccessList::load_from_file("authorized-users.toml", config.env)
+            .context("loading authorized-users.toml")?,
+    );
+    tracing::info!(count = access.len(), "loaded authorized users");
 
     let generator = Arc::new(OllamaGenerator::new(
         &config.ollama_url,
@@ -110,6 +118,7 @@ async fn main() -> Result<()> {
         stories,
         oauth,
         http,
+        access,
     };
 
     // Build the router and stack the security-header layers on top.

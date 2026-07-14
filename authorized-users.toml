@@ -1,0 +1,22 @@
+# The Council's authorized users.
+#
+# Anyone signed in with Google whose email appears here is allowed in.
+# Anyone else gets a 403 after the Google round-trip, no matter how
+# legitimate their Google session. Case-insensitive; whitespace trimmed.
+#
+# Add or remove a user via PR to this file. Duplicates and empty entries
+# fail the app's boot loudly. In production, an empty list is also a
+# boot error (nobody could sign in — that's not a valid deploy state).
+#
+# `admin = true` grants elevated access. Today the flag only lives on
+# SessionUser; admin-only routes will start using it as they arrive.
+
+[[users]]
+email = "franks.emerson@gmail.com"
+admin = true
+
+# Example entry — copy, paste, adjust:
+#
+# [[users]]
+# email = "someone.else@gmail.com"
+# admin = false

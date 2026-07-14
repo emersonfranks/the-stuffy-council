@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -284,4 +284,56 @@ migration (pre-launch, no live rows). `AppState` now carries a shared
 - status: Fixed
 
 (Log grows from here.)
+
+## 2026-07-14 — file-based-allowlist
+
+- Author model:   Claude Opus 4.7 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - authorized-users.toml (new)
+  - src/access.rs (new)
+  - src/config.rs
+  - src/auth.rs
+  - src/routes/auth.rs
+  - src/state.rs
+  - src/main.rs
+  - .env.example
+  - .dockerignore
+  - Dockerfile
+  - AGENTS.md
+  - README.md
+
+Change summary: folded backlog issue #2 into PR #1. Replaced the
+`ALLOWED_EMAILS` env-var allowlist with a committed
+`authorized-users.toml` at the repo root (add/remove is a PR). New
+`AccessList` type (`src/access.rs`) parses the file, lowercases +
+trims emails, rejects duplicates, and errors on empty in production
+only. `SessionUser` gains a persisted-on-session-only `admin: bool`
+sourced from the file (never from Google); `upsert_user` takes it as
+a parameter. Google callback swaps the `state.config.allowed_emails`
+membership check for `state.access.check(&info.email)`. Container
+image now COPYs `authorized-users.toml` into `/app/`.
+
+### Findings
+
+#### F1 — MAJOR | correctness | Dockerfile:44 | Docker build cannot copy the allowlist because `.dockerignore` excludes it
+- what: The runtime stage COPYs `authorized-users.toml`, but
+  `.dockerignore` starts with `*` and never re-includes that file,
+  so the source is missing from the build context.
+- why:  Broke the documented Azure Container Apps image build; safe-
+  modification invariant.
+- fix:  Added `!authorized-users.toml` to `.dockerignore`.
+- status: Fixed
+
+#### F2 — NIT | agent-authoring | src/access.rs:3 | module preamble recorded change history instead of a current invariant
+- what: The module doc-comment said the env-var allowlist "is gone"
+  and pointed at issue #2 for the design rationale — describes how
+  the code changed, not what future agents must preserve.
+- why:  agent-authoring policy: comments must NOT include change-log
+  entries; git is the record.
+- fix:  Rewrote to state the current-state invariants only
+  (case-insensitive gate, PR-to-modify, duplicates + prod-empty
+  boot errors).
+- status: Fixed
 
