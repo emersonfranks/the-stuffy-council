@@ -50,11 +50,14 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 async-trait = "0.1"
 
-# Auth / crypto
-argon2 = "0.5"
-password-hash = { version = "0.5", features = ["std"] }
+# Auth — Google Identity Services (client-side sign-in, server verifies the ID token JWT).
+# No OAuth authorization-code flow, no client_secret. Only a public client_id.
+jsonwebtoken = "9"
+
+# Utilities used by CSRF token generation (web::csrf) and the story cast
+# random pick (stories::pick_cast_for). NOT used for Google auth.
 rand = "0.8"
-subtle = "2"                     # constant-time compare for CSRF tokens
+subtle = "2"
 base64 = "0.22"
 
 # Errors + logging
@@ -68,6 +71,10 @@ time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"
 
 # Dev-time env loading (not used in production containers — env vars come from the platform)
 dotenvy = "0.15"
+
+[dev-dependencies]
+# Scratch directories/files for the-database + allowlist wire-ups in integration tests.
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

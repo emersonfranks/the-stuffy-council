@@ -29,6 +29,10 @@ pub struct Config {
     pub public_origin: String,
     pub session_secret: Vec<u8>,
     pub database_url: String,
+    /// Public OAuth 2.0 client id from Google Cloud Console. Safe to embed
+    /// in HTML; not a secret. Sign-in uses Google Identity Services — there
+    /// is no client secret in this codebase.
+    pub google_client_id: String,
     pub ollama_url: String,
     pub ollama_model: String,
     pub ollama_timeout: Duration,
@@ -53,8 +57,12 @@ impl Config {
             .parse()
             .context("BIND_ADDR must be a valid socket address, e.g. 0.0.0.0:8080")?;
 
+        // Fallback uses `localhost` (not `bind_addr`) because Google GIS
+        // rejects `127.0.0.1` for plain-HTTP local dev; the operator is
+        // expected to override PUBLIC_ORIGIN in production anyway.
         let public_origin =
-            env::var("PUBLIC_ORIGIN").unwrap_or_else(|_| format!("http://{bind_addr}"));
+            env::var("PUBLIC_ORIGIN").unwrap_or_else(|_| format!("http://localhost:{}", bind_addr.port()));
+        let public_origin = public_origin.trim_end_matches('/').to_string();
 
         let session_secret_raw =
             env::var("SESSION_SECRET").context("SESSION_SECRET is required")?;
@@ -74,6 +82,12 @@ impl Config {
 
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "sqlite://stuffy-council.sqlite?mode=rwc".into());
+
+        let google_client_id =
+            env::var("GOOGLE_CLIENT_ID").context("GOOGLE_CLIENT_ID is required")?;
+        if google_client_id.trim().is_empty() {
+            return Err(anyhow!("GOOGLE_CLIENT_ID is empty"));
+        }
 
         let ollama_url = env::var("OLLAMA_URL").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
         let ollama_model =
@@ -99,6 +113,7 @@ impl Config {
             public_origin,
             session_secret,
             database_url,
+            google_client_id,
             ollama_url,
             ollama_model,
             ollama_timeout,

@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Sign in — The Stuffy Council{% endblock %}
 
+{% block extra_head %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+{% endblock %}
+
 {% block content %}
 <div class="mx-auto max-w-md bg-white/70 backdrop-blur rounded-2xl shadow-md p-8 border border-white">
   <h1 class="text-2xl font-semibold text-slate-800">The Stuffy Council</h1>
-  <p class="mt-1 text-sm text-slate-500">Please sign in to hear today&rsquo;s story.</p>
+  <p class="mt-1 text-sm text-slate-500">Family sign-in only.</p>
 
   {% match error %}
     {% when Some with (msg) %}
@@ -12,32 +16,20 @@
     {% when None %}
   {% endmatch %}
 
-  <form method="post" action="/login" class="mt-6 space-y-4">
-    <input type="hidden" name="_csrf" value="{{ csrf_token }}" />
-    <label class="block">
-      <span class="text-sm font-medium text-slate-700">Username</span>
-      <input
-        name="username"
-        type="text"
-        autocomplete="username"
-        required
-        class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-      />
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium text-slate-700">Password</span>
-      <input
-        name="password"
-        type="password"
-        autocomplete="current-password"
-        required
-        class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-      />
-    </label>
-    <button
-      type="submit"
-      class="w-full rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium py-2 px-4 shadow-sm transition"
-    >Sign in</button>
-  </form>
+  <div id="g_id_onload"
+       data-client_id="{{ google_client_id }}"
+       data-login_uri="{{ login_uri }}"
+       data-context="signin"
+       data-ux_mode="redirect"
+       data-auto_prompt="false">
+  </div>
+  <div class="g_id_signin mt-6"
+       data-type="standard"
+       data-shape="rectangular"
+       data-theme="filled_blue"
+       data-text="signin_with"
+       data-size="large"
+       data-logo_alignment="left">
+  </div>
 </div>
 {% endblock %}

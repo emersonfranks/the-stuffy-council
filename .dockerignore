@@ -10,3 +10,4 @@
 !templates/**
 !cast/**
 !migrations/**
+!authorized-users.toml

@@ -13,22 +13,35 @@ use crate::config::Environment;
 /// Content-Security-Policy for our own pages.
 ///
 /// * default-src 'self' — everything must come from our origin unless overridden.
-/// * script-src 'self' https://unpkg.com — HTMX loaded from a versioned unpkg URL for now.
-/// * style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com — Tailwind CDN + Askama-embedded style attributes.
+/// * script-src 'self' https://unpkg.com https://accounts.google.com/gsi/client
+///   — HTMX from unpkg + the GIS client library. Path components ARE enforced
+///   by browsers on the initial request (W3C CSP L3 §6.7.2.7, §6.7.2.12), so
+///   this restricts scripts to those two exact URLs; a compromise elsewhere on
+///   `accounts.google.com` cannot serve script into our pages without also
+///   controlling `/gsi/client`. CAVEAT: paths are IGNORED after a redirect
+///   (§7.6), so if Google ever 302s `/gsi/client` to another path on the same
+///   host the browser will still load it — which is fine here because we trust
+///   the whole `accounts.google.com` origin, and the pinning is just
+///   defense-in-depth against upstream URL surface expansion.
+/// * style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/style
+///   — Tailwind CDN + Askama-embedded style attributes + GIS button styles.
 ///   TODO: swap the Tailwind CDN for a self-built stylesheet before production so we can drop 'unsafe-inline'.
-/// * img-src 'self' data: — generated images we serve locally; data: URIs allowed for small inline art.
-/// * connect-src 'self' — no cross-origin fetches from the browser.
-/// * frame-ancestors 'none' — we never want to be iframed.
-/// * form-action 'self' — forms may only POST back to us.
+/// * img-src 'self' data: https://*.googleusercontent.com — user avatars appear on the GIS personalized button.
+/// * connect-src 'self' https://accounts.google.com/gsi/ — GIS auxiliary fetches (revocation, one-tap resources).
+/// * frame-src https://accounts.google.com/gsi/ — GIS renders its consent UI in an iframe.
+/// * frame-ancestors 'none' — WE never want to be iframed by anyone else.
+/// * form-action 'self' — Google's GIS POST is initiated on Google's page (governed by their CSP)
+///   and targets us; our CSP only governs forms rendered on our origin.
 /// * base-uri 'self' — kill `<base>` injection tricks.
 /// * object-src 'none' — no plugins.
 const CSP: &str = "\
 default-src 'self'; \
-script-src 'self' https://unpkg.com; \
-style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; \
-img-src 'self' data:; \
+script-src 'self' https://unpkg.com https://accounts.google.com/gsi/client; \
+style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/style; \
+img-src 'self' data: https://*.googleusercontent.com; \
 font-src 'self' data:; \
-connect-src 'self'; \
+connect-src 'self' https://accounts.google.com/gsi/; \
+frame-src https://accounts.google.com/gsi/; \
 frame-ancestors 'none'; \
 form-action 'self'; \
 base-uri 'self'; \

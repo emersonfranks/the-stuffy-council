@@ -12,11 +12,13 @@ use crate::state::AppState;
 pub fn router(state: AppState) -> Router {
     Router::new()
         // Public
-        .route("/login", get(auth::show_login).post(auth::do_login))
+        .route("/login", get(auth::show_login))
+        .route("/auth/google/verify", post(auth::google_verify))
         .route("/logout", post(auth::do_logout))
         .route("/healthz", get(|| async { "ok" }))
-        // Protected — the login middleware is applied inside routes we care about
-        // via the SessionUser extractor, so we don't need a separate layer here.
+        // Protected — each handler calls the local `require_user(&session)`
+        // helper at entry and redirects to `/login` when it returns `None`.
+        // There is no dedicated extractor; the check lives in the handler.
         .route("/", get(home::index))
         .route("/story/today", get(home::today))
         .route("/council", get(characters::list_characters))

@@ -1,9 +1,14 @@
-//! Login / logout routes.
+//! Sign-in and sign-out routes.
+//!
+//! Auth is delegated entirely to Google Identity Services (GIS). The login
+//! page embeds Google's button; on success Google POSTs an ID token JWT
+//! here. We verify it against Google's public JWKS, gate on the allowlist,
+//! and open a session. No OAuth 2.0 code flow, no client_secret.
 
 use askama::Template;
 use axum::Form;
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::extract::{Query, State};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::Deserialize;
 use tower_sessions::Session;
@@ -13,15 +18,25 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::web::csrf;
 
+/// Name of the double-submit CSRF cookie Google GIS sets when it POSTs the
+/// credential to our login endpoint. Same string appears in the form body.
+const GOOGLE_CSRF_COOKIE: &str = "g_csrf_token";
+
 #[derive(Template)]
 #[template(path = "login.html")]
-struct LoginTemplate {
-    csrf_token: String,
+struct LoginTemplate<'a> {
     error: Option<&'static str>,
+    google_client_id: &'a str,
+    login_uri: String,
 }
 
-pub async fn show_login(session: Session) -> AppResult<Response> {
-    // If already logged in, bounce home.
+/// GET /login — renders the GIS sign-in button. If a valid session already
+/// exists, redirect straight home.
+pub async fn show_login(
+    State(state): State<AppState>,
+    session: Session,
+    Query(q): Query<LoginQuery>,
+) -> AppResult<Response> {
     if session
         .get::<SessionUser>(SESSION_USER_KEY)
         .await
@@ -30,42 +45,90 @@ pub async fn show_login(session: Session) -> AppResult<Response> {
     {
         return Ok(Redirect::to("/").into_response());
     }
-    let csrf_token = csrf::token(&session).await?;
+    let error = match q.error.as_deref() {
+        Some("denied") => Some("That Google account is not on the allowlist for this site."),
+        Some("csrf") => Some("Sign-in request failed a security check. Please try again."),
+        Some("google") => Some("Google sign-in failed. Please try again."),
+        _ => None,
+    };
+    let login_uri = format!("{}/auth/google/verify", state.config.public_origin);
     let tpl = LoginTemplate {
-        csrf_token,
-        error: None,
+        error,
+        google_client_id: &state.config.google_client_id,
+        login_uri,
     };
     Ok(render(&tpl)?.into_response())
 }
 
 #[derive(Deserialize)]
-pub struct LoginForm {
-    username: String,
-    password: String,
-    #[serde(rename = "_csrf")]
-    csrf: String,
+pub struct LoginQuery {
+    error: Option<String>,
 }
 
-pub async fn do_login(
+/// Form body Google GIS POSTs to our login endpoint.
+///
+/// The struct field `g_csrf_token` intentionally matches the wire name so
+/// we don't need a serde rename attribute (also matches the cookie name).
+#[derive(Deserialize)]
+pub struct VerifyForm {
+    credential: String,
+    g_csrf_token: String,
+}
+
+/// POST /auth/google/verify — Google GIS delivers the signed ID token here.
+///
+/// Steps:
+///   1. Double-submit CSRF: the `g_csrf_token` cookie must equal the form
+///      field. Only our own origin can read the cookie, so if they match,
+///      the POST was initiated from a page we rendered.
+///   2. Verify the ID token: signature (against Google's JWKS), issuer,
+///      audience (== our client_id), expiry, and `email_verified`.
+///   3. Allowlist gate: the email must be present in `authorized-users.toml`.
+///   4. Upsert user row, cycle session id (fixation defense), stash SessionUser.
+pub async fn google_verify(
     State(state): State<AppState>,
     session: Session,
-    Form(form): Form<LoginForm>,
+    headers: HeaderMap,
+    Form(form): Form<VerifyForm>,
 ) -> AppResult<Response> {
-    csrf::verify(&session, &form.csrf).await?;
+    let Some(cookie_token) = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_g_csrf_cookie)
+    else {
+        tracing::warn!("google verify: missing g_csrf_token cookie");
+        return Ok(Redirect::to("/login?error=csrf").into_response());
+    };
+    if cookie_token.is_empty() || cookie_token != form.g_csrf_token {
+        tracing::warn!("google verify: g_csrf_token mismatch");
+        return Ok(Redirect::to("/login?error=csrf").into_response());
+    }
 
-    let user = match auth::authenticate(&state.db, form.username.trim(), &form.password).await? {
-        Some(u) => u,
-        None => {
-            let csrf_token = csrf::token(&session).await?;
-            let tpl = LoginTemplate {
-                csrf_token,
-                error: Some("Invalid username or password."),
-            };
-            return Ok((StatusCode::UNAUTHORIZED, render(&tpl)?).into_response());
+    let claims = match auth::verify_id_token(
+        &state.jwks,
+        &state.config.google_client_id,
+        &form.credential,
+    )
+    .await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = ?e, "google id token verification failed");
+            return Ok(Redirect::to("/login?error=google").into_response());
         }
     };
 
-    // Session-fixation defense: rotate the session id when the auth state changes.
+    let Some(entry) = state.access.check(&claims.email) else {
+        tracing::warn!(email = %claims.email, "sign-in blocked: not on allowlist");
+        return Ok(Redirect::to("/login?error=denied").into_response());
+    };
+    let admin = entry.admin;
+
+    let user = auth::upsert_user(&state.db, &claims, admin)
+        .await
+        .map_err(AppError::Internal)?;
+
+    // Session-fixation defense: new session id on any auth-state change.
     session
         .cycle_id()
         .await
@@ -75,7 +138,7 @@ pub async fn do_login(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("session insert user: {e}")))?;
 
-    tracing::info!(user = %user.username, "login ok");
+    tracing::info!(user_id = user.id, email = %user.email, "google sign-in ok");
     Ok(Redirect::to("/").into_response())
 }
 
@@ -91,7 +154,19 @@ pub async fn do_logout(session: Session, Form(form): Form<LogoutForm>) -> AppRes
         .flush()
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("session flush: {e}")))?;
-    Ok(Redirect::to("/login").into_response())
+    Ok((StatusCode::SEE_OTHER, Redirect::to("/login")).into_response())
+}
+
+/// Pull the value of the `g_csrf_token` cookie from a raw `Cookie:` header.
+/// Returns None if the cookie is absent.
+fn parse_g_csrf_cookie(cookie_header: &str) -> Option<String> {
+    let prefix = format!("{GOOGLE_CSRF_COOKIE}=");
+    for part in cookie_header.split(';') {
+        if let Some(v) = part.trim().strip_prefix(&prefix) {
+            return Some(v.to_owned());
+        }
+    }
+    None
 }
 
 fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
@@ -100,3 +175,69 @@ fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
         .map_err(|e| AppError::Internal(anyhow::anyhow!("template render: {e}")))?;
     Ok(Html(body))
 }
+
+#[cfg(test)]
+mod tests {
+    // Covers functional / edge / negative dimensions.
+    // error-handling N/A: parse_g_csrf_cookie is a pure string parser with
+    // no I/O and no fallible dependencies — every failure mode is `None`.
+    // state-transition N/A: parse_g_csrf_cookie is stateless.
+
+    use super::*;
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_from_solo_cookie() {
+        let got = parse_g_csrf_cookie("g_csrf_token=abc123");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_when_flanked_by_other_cookies() {
+        let got = parse_g_csrf_cookie("stuffy_session=xyz; g_csrf_token=abc123; other=1");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_returns_value_from_leading_position_no_space() {
+        let got = parse_g_csrf_cookie("g_csrf_token=abc123;stuffy_session=xyz");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_empty_value_is_returned_as_empty_string() {
+        // Handler still rejects empty via `cookie_token.is_empty()` check;
+        // parser's contract is "return whatever is there or None."
+        let got = parse_g_csrf_cookie("g_csrf_token=");
+        assert_eq!(got.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_tolerates_whitespace_between_pairs() {
+        let got = parse_g_csrf_cookie("stuffy_session=xyz;   g_csrf_token=abc123");
+        assert_eq!(got.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_missing_cookie_returns_none() {
+        assert!(parse_g_csrf_cookie("stuffy_session=xyz; other=1").is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_empty_header_returns_none() {
+        assert!(parse_g_csrf_cookie("").is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_does_not_match_prefix_collisions() {
+        // A cookie named `g_csrf_token_other` must not satisfy the lookup.
+        let got = parse_g_csrf_cookie("g_csrf_token_other=nope; stuffy_session=xyz");
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn parse_g_csrf_cookie_bare_name_without_equals_is_ignored() {
+        let got = parse_g_csrf_cookie("g_csrf_token; stuffy_session=xyz");
+        assert!(got.is_none());
+    }
+}
+
