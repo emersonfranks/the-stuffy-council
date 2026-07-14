@@ -20,21 +20,36 @@
 //!
 //! The JwkCache refreshes lazily on unknown-`kid` misses because Google
 //! rotates keys roughly every fortnight; on-miss refresh keeps us correct
-//! without a background task.
+//! without a background task. To keep an attacker who floods
+//! /auth/google/verify with random-`kid` tokens from turning us into a
+//! JWKS-fetch amplifier against Google, on-miss refreshes are rate-limited
+//! by `JWKS_REFRESH_COOLDOWN` and coalesced by `refresh_mutex` — concurrent
+//! misses across many workers only produce at most one outbound fetch per
+//! cooldown window. The cooldown is keyed on refresh ATTEMPT time (recorded
+//! before the outbound send), so a failing upstream cannot be repeatedly
+//! re-hit inside the same window.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 pub const SESSION_USER_KEY: &str = "user";
 
 const GOOGLE_JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
 const GOOGLE_ISSUERS: &[&str] = &["accounts.google.com", "https://accounts.google.com"];
+
+/// Minimum wall-clock gap between two on-miss JWKS refreshes. Any unknown-`kid`
+/// miss inside this window returns "kid not found" without contacting Google.
+/// Google rotates roughly every fortnight; five minutes is generous for
+/// legitimate rotation while denying attackers the ability to force repeated
+/// outbound fetches. `pub` so integration tests can reason about the bound.
+pub const JWKS_REFRESH_COOLDOWN: Duration = Duration::from_secs(300);
 
 /// Session-stored identity. Kept minimal — cookie header size matters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,25 +66,61 @@ pub struct SessionUser {
 
 /// Cached Google JWKS keyed by JWT header `kid`.
 ///
-/// Google rotates roughly every fortnight. On an unknown-kid verify, we
-/// refresh once and retry; if the kid is still absent, verification fails.
+/// Google rotates roughly every fortnight. On an unknown-kid verify we
+/// refresh at most once per `JWKS_REFRESH_COOLDOWN` window (measured from
+/// refresh ATTEMPT, so upstream failures also count) and coalesce concurrent
+/// refreshers through `refresh_mutex`; if the kid is still absent after a
+/// permitted refresh — or the cooldown blocked the refresh entirely —
+/// verification fails without a fresh fetch. This bounds outbound traffic
+/// to Google under a flood of tokens with attacker-chosen random `kid`s
+/// even when Google itself is returning errors.
 pub struct JwkCache {
     keys: RwLock<HashMap<String, DecodingKey>>,
     http: reqwest::Client,
+    jwks_url: String,
+    /// `Some(t)` iff a `refresh()` has been *attempted* (successful or not) at
+    /// least once; `t` is when the attempt began. Governs the on-miss cooldown
+    /// gate. Tracking attempt time (not success time) is what makes upstream
+    /// failures fall under the same amplification cap as successes.
+    last_refresh_attempt: RwLock<Option<Instant>>,
+    /// Held for the duration of a single `refresh()` call to prevent a
+    /// stampede: N concurrent misses across workers turn into at most one
+    /// outbound fetch. Must never be held across a `keys` write lock.
+    refresh_mutex: Mutex<()>,
 }
 
 impl JwkCache {
     pub fn new(http: reqwest::Client) -> Self {
+        Self::with_url(http, GOOGLE_JWKS_URL.to_string())
+    }
+
+    /// Construct a cache pointing at a caller-supplied JWKS URL. Only used
+    /// by tests that spin up a fake `/certs` endpoint; production callers
+    /// use `new` and get Google's real endpoint.
+    fn with_url(http: reqwest::Client, jwks_url: String) -> Self {
         Self {
             keys: RwLock::new(HashMap::new()),
             http,
+            jwks_url,
+            last_refresh_attempt: RwLock::new(None),
+            refresh_mutex: Mutex::new(()),
         }
     }
 
+    /// Unconditional fetch from the configured JWKS URL. Records the attempt
+    /// timestamp BEFORE the outbound send so that failed attempts still count
+    /// against the on-miss cooldown — without this, a flood of unknown `kid`s
+    /// against a returning-500 upstream would produce one outbound fetch per
+    /// misser, defeating the amplification cap. Callers should prefer
+    /// `refresh_if_stale` on the on-miss path; this is exposed only for the
+    /// eager warm-up at boot in main.rs, where we want a hard failure if
+    /// Google is unreachable so the operator sees it.
     pub async fn refresh(&self) -> Result<()> {
+        *self.last_refresh_attempt.write().await = Some(Instant::now());
+
         let set: JwkSet = self
             .http
-            .get(GOOGLE_JWKS_URL)
+            .get(&self.jwks_url)
             .send()
             .await
             .context("fetching Google JWKS")?
@@ -99,12 +150,53 @@ impl JwkCache {
         self.keys.read().await.get(kid).cloned()
     }
 
-    /// Return the key for `kid`, refreshing from Google on miss.
+    /// True when a fresh outbound refresh attempt is permitted (never
+    /// attempted, or the last attempt was at least `JWKS_REFRESH_COOLDOWN`
+    /// ago). Split out so tests can assert the decision without hitting HTTP.
+    async fn should_refresh(&self) -> bool {
+        match *self.last_refresh_attempt.read().await {
+            None => true,
+            Some(t) => t.elapsed() >= JWKS_REFRESH_COOLDOWN,
+        }
+    }
+
+    /// Coalesced + cooldown-gated refresh used by `get_or_refresh`. Acquires
+    /// `refresh_mutex` on EVERY cache miss (before checking the cooldown)
+    /// so a late-arriving misser is forced to wait for any in-flight refresh
+    /// to publish its keys before it re-checks the cache. Checking the
+    /// cooldown *outside* the mutex would let a late arriver observe
+    /// `last_refresh_attempt` being set — recorded at the start of the
+    /// in-flight `refresh()` — skip the mutex, and then read the still-empty
+    /// keys map for a spurious "kid not found" while the refresh is
+    /// mid-flight.
+    ///
+    /// Returns:
+    ///  * `Ok(true)`  — a fresh outbound attempt ran AND succeeded (keys
+    ///    published, `last_refresh_attempt` updated).
+    ///  * `Ok(false)` — no attempt ran because a recent attempt is already
+    ///    on file (either observed before or after taking the mutex).
+    ///  * `Err(_)`    — a fresh attempt ran and failed; `last_refresh_attempt`
+    ///    was still updated (by `refresh()` before the outbound send), so
+    ///    subsequent callers inside the cooldown window will skip.
+    async fn refresh_if_stale(&self) -> Result<bool> {
+        let _guard = self.refresh_mutex.lock().await;
+        if !self.should_refresh().await {
+            return Ok(false);
+        }
+        self.refresh().await?;
+        Ok(true)
+    }
+
+    /// Return the key for `kid`, refreshing from Google on miss subject to
+    /// the cooldown + singleflight gate. If the kid is still absent after
+    /// a permitted refresh, or if the cooldown blocked the refresh entirely,
+    /// verification fails — an attacker cannot force repeated outbound
+    /// fetches by sending tokens with random `kid`s.
     async fn get_or_refresh(&self, kid: &str) -> Result<DecodingKey> {
         if let Some(k) = self.get(kid).await {
             return Ok(k);
         }
-        self.refresh().await?;
+        self.refresh_if_stale().await?;
         self.get(kid)
             .await
             .ok_or_else(|| anyhow!("kid `{kid}` not found in Google JWKS after refresh"))
@@ -207,4 +299,321 @@ pub async fn upsert_user(
         display_name: row.2,
         admin,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    // NOTE: `verify_id_token` and `upsert_user` are not covered here yet —
+    // signing a real Google-issued JWT would require either committing an
+    // Ed25519/RSA test key or wiring a jsonwebtoken encoder into the fake
+    // JWKS harness below. tests/router_smoke.rs also defers
+    // `POST /auth/google/verify` end-to-end coverage (see its doc block).
+    // The DoS-guard coverage below IS enough to catch the regression Copilot
+    // flagged on PR #1: `get_or_refresh` no longer performs an unconditional
+    // outbound fetch per unknown `kid`.
+    //
+    // Coverage dimensions here (see .github/instructions/test-quality.instructions.md):
+    //   * decision logic  — should_refresh_* (functional + state-transition)
+    //   * amplification cap — flood_of_unknown_kids_produces_one_upstream_fetch
+    //     (regression for the finding)
+    //   * upstream failure — upstream_500_still_counts_against_cooldown
+    //     (error / dependency-failure)
+    //   * concurrency     — concurrent_misses_collapse_to_one_upstream_fetch
+    //     (singleflight state-transition)
+    //   * cooldown expiry — miss_after_cooldown_expiry_permits_second_attempt
+    //
+    // Deferred: a positive-verification path (unknown kid on first miss, kid
+    // present after refresh) would need us to mint a valid JWK response body
+    // that matches a signing key we control. Filed as a follow-up rather
+    // than gating this fix.
+
+    use super::*;
+    use axum::Router;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::net::TcpListener;
+    use tokio::sync::Notify;
+
+    #[derive(Clone)]
+    enum FakeResponse {
+        /// 200 OK with `{"keys": []}` — well-formed but useless, which is
+        /// exactly what "unknown kid" looks like from the cache's POV.
+        EmptyKeys,
+        /// 500 to simulate Google unavailable.
+        Status500,
+    }
+
+    struct FakeJwks {
+        url: String,
+        hits: Arc<AtomicUsize>,
+        release: Arc<Notify>,
+        // Server runs in a spawned task; dropping the handle aborts it.
+        _server: tokio::task::JoinHandle<()>,
+    }
+
+    impl FakeJwks {
+        async fn spawn(response: FakeResponse) -> Self {
+            Self::spawn_inner(response, /* gated */ false).await
+        }
+
+        /// Variant used by `late_arriver_waits_for_in_flight_refresh`: the
+        /// handler increments `hits` immediately (so the test can observe
+        /// task A has entered `refresh()`), then blocks on `release` until
+        /// the test explicitly notifies it. Response body is `EmptyKeys`
+        /// because the test doesn't need a positive verification.
+        async fn spawn_gated() -> Self {
+            Self::spawn_inner(FakeResponse::EmptyKeys, /* gated */ true).await
+        }
+
+        async fn spawn_inner(response: FakeResponse, gated: bool) -> Self {
+            let hits = Arc::new(AtomicUsize::new(0));
+            let release = Arc::new(Notify::new());
+            let hits_for_handler = Arc::clone(&hits);
+            let release_for_handler = Arc::clone(&release);
+            let app = Router::new().route(
+                "/certs",
+                get(move || {
+                    let hits = Arc::clone(&hits_for_handler);
+                    let release = Arc::clone(&release_for_handler);
+                    let response = response.clone();
+                    async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        if gated {
+                            release.notified().await;
+                        }
+                        match response {
+                            FakeResponse::EmptyKeys => (
+                                StatusCode::OK,
+                                [("content-type", "application/json")],
+                                r#"{"keys":[]}"#,
+                            )
+                                .into_response(),
+                            FakeResponse::Status500 => {
+                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                            }
+                        }
+                    }
+                }),
+            );
+            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind fake JWKS");
+            let addr = listener.local_addr().expect("local_addr");
+            let server = tokio::spawn(async move {
+                let _ = axum::serve(listener, app).await;
+            });
+            Self {
+                url: format!("http://{addr}/certs"),
+                hits,
+                release,
+                _server: server,
+            }
+        }
+
+        fn hit_count(&self) -> usize {
+            self.hits.load(Ordering::SeqCst)
+        }
+
+        /// Unblock the gated handler so it produces a response. No-op for
+        /// non-gated fakes (nothing is waiting on the notify).
+        fn release(&self) {
+            self.release.notify_waiters();
+        }
+    }
+
+    fn cache_pointed_at(url: &str) -> JwkCache {
+        JwkCache::with_url(reqwest::Client::new(), url.to_string())
+    }
+
+    // ---- decision-logic tests (no HTTP) --------------------------------
+
+    #[tokio::test]
+    async fn should_refresh_true_when_never_attempted() {
+        // Placeholder URL is never contacted — should_refresh does not fetch.
+        let cache = cache_pointed_at("http://127.0.0.1:1/certs");
+        assert!(cache.should_refresh().await);
+    }
+
+    #[tokio::test]
+    async fn should_refresh_false_immediately_after_attempt() {
+        let cache = cache_pointed_at("http://127.0.0.1:1/certs");
+        *cache.last_refresh_attempt.write().await = Some(Instant::now());
+        assert!(!cache.should_refresh().await);
+    }
+
+    #[tokio::test]
+    async fn should_refresh_true_after_cooldown_elapsed() {
+        let cache = cache_pointed_at("http://127.0.0.1:1/certs");
+        let past = Instant::now()
+            .checked_sub(JWKS_REFRESH_COOLDOWN + Duration::from_secs(1))
+            .expect("test clock predates process start");
+        *cache.last_refresh_attempt.write().await = Some(past);
+        assert!(cache.should_refresh().await);
+    }
+
+    #[tokio::test]
+    async fn cooldown_bounds_worst_case_fetch_rate() {
+        // Regression guard on the constant itself: dropping this below one
+        // minute would make the DoS gate porous under sustained flooding.
+        assert!(JWKS_REFRESH_COOLDOWN >= Duration::from_secs(60));
+    }
+
+    // ---- amplification / regression tests (HTTP) ----------------------
+
+    /// Regression for PR #1 Copilot finding F3: a flood of unknown-`kid`
+    /// lookups must NOT translate to a corresponding flood of outbound
+    /// fetches. Reverting `get_or_refresh` to call `refresh()`
+    /// unconditionally makes this test fail (hit count == 5 instead of 1).
+    #[tokio::test]
+    async fn flood_of_unknown_kids_produces_one_upstream_fetch() {
+        let fake = FakeJwks::spawn(FakeResponse::EmptyKeys).await;
+        let cache = cache_pointed_at(&fake.url);
+
+        for _ in 0..5 {
+            // We expect an error (empty JWKS + unknown kid); the SHAPE of
+            // the error is not the point of this test, the hit count is.
+            let result = cache.get_or_refresh("attacker-kid").await;
+            assert!(result.is_err(), "unknown kid must not verify");
+        }
+        assert_eq!(
+            fake.hit_count(),
+            1,
+            "cooldown must cap outbound fetches to one per window"
+        );
+    }
+
+    /// Copilot F3 explicitly called out amplification, but a naive fix that
+    /// only records `last_refresh` on success would still leak under an
+    /// upstream that returns 500. This test locks that in: even when the
+    /// fake JWKS is down, only ONE outbound attempt happens per window.
+    #[tokio::test]
+    async fn upstream_500_still_counts_against_cooldown() {
+        let fake = FakeJwks::spawn(FakeResponse::Status500).await;
+        let cache = cache_pointed_at(&fake.url);
+
+        for _ in 0..5 {
+            let result = cache.get_or_refresh("attacker-kid").await;
+            assert!(
+                result.is_err(),
+                "unknown kid against 500-upstream must not verify"
+            );
+        }
+        assert_eq!(
+            fake.hit_count(),
+            1,
+            "failed refreshes must still consume the cooldown budget"
+        );
+    }
+
+    /// Singleflight coverage: N concurrent misses across tasks must collapse
+    /// to a single outbound fetch, not N. Without `refresh_mutex` this test
+    /// non-deterministically produces hit counts up to 10.
+    #[tokio::test]
+    async fn concurrent_misses_collapse_to_one_upstream_fetch() {
+        let fake = FakeJwks::spawn(FakeResponse::EmptyKeys).await;
+        let cache = Arc::new(cache_pointed_at(&fake.url));
+
+        let mut joins = Vec::new();
+        for _ in 0..10 {
+            let cache = Arc::clone(&cache);
+            joins.push(tokio::spawn(async move {
+                cache.get_or_refresh("attacker-kid").await.is_err()
+            }));
+        }
+        for j in joins {
+            let was_err = j.await.expect("task panicked");
+            assert!(was_err, "unknown kid must not verify from any concurrent task");
+        }
+        assert_eq!(
+            fake.hit_count(),
+            1,
+            "singleflight must coalesce concurrent refreshers"
+        );
+    }
+
+    /// After the cooldown window elapses, a subsequent miss IS allowed to
+    /// try again — the gate is a rate limiter, not a permanent seal. Fakes
+    /// the passage of time by rewriting `last_refresh_attempt` (real sleep
+    /// would push the test past its 60s wallclock budget in CI).
+    #[tokio::test]
+    async fn miss_after_cooldown_expiry_permits_second_attempt() {
+        let fake = FakeJwks::spawn(FakeResponse::EmptyKeys).await;
+        let cache = cache_pointed_at(&fake.url);
+
+        let first = cache.get_or_refresh("kid-a").await;
+        assert!(first.is_err(), "unknown kid must not verify");
+        assert_eq!(fake.hit_count(), 1);
+
+        // Simulate cooldown expiry.
+        *cache.last_refresh_attempt.write().await = Some(
+            Instant::now()
+                .checked_sub(JWKS_REFRESH_COOLDOWN + Duration::from_secs(1))
+                .expect("test clock predates process start"),
+        );
+
+        let second = cache.get_or_refresh("kid-b").await;
+        assert!(second.is_err(), "unknown kid must not verify");
+        assert_eq!(
+            fake.hit_count(),
+            2,
+            "cooldown expiry must re-enable outbound refresh"
+        );
+    }
+
+    /// Regression for the mutex-vs-cooldown race that GPT-5.5 flagged in the
+    /// first follow-up review of PR #1: without acquiring `refresh_mutex`
+    /// BEFORE checking the cooldown, a late arriver can observe
+    /// `last_refresh_attempt` being set (recorded at the start of an
+    /// in-flight `refresh()`), skip the mutex, and read the still-empty
+    /// keys map for a spurious "kid not found" while the refresh is
+    /// mid-flight.
+    ///
+    /// The test gates the fake JWKS on a `Notify`, starts one caller
+    /// (task A) which blocks inside `refresh()`, and asserts that a second
+    /// caller (task B) arriving while task A is mid-flight does NOT complete
+    /// until we explicitly release the fake. The buggy pre-fix flow would
+    /// let task B race past the mutex and complete promptly with an error.
+    #[tokio::test]
+    async fn late_arriver_waits_for_in_flight_refresh() {
+        let fake = FakeJwks::spawn_gated().await;
+        let cache = Arc::new(cache_pointed_at(&fake.url));
+
+        let cache_a = Arc::clone(&cache);
+        let task_a = tokio::spawn(async move { cache_a.get_or_refresh("kid").await.is_err() });
+
+        // Wait until task A has actually reached the fake handler; using
+        // yield_now avoids a wallclock-sensitive sleep.
+        while fake.hit_count() == 0 {
+            tokio::task::yield_now().await;
+        }
+
+        let cache_b = Arc::clone(&cache);
+        let mut task_b =
+            tokio::spawn(async move { cache_b.get_or_refresh("kid").await.is_err() });
+
+        // If the mutex-first fix is missing, task B races past the singleflight
+        // and completes within microseconds while task A is still gated.
+        tokio::select! {
+            biased;
+            r = &mut task_b => panic!(
+                "task B raced past in-flight refresh; join result = {:?}",
+                r
+            ),
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+        }
+
+        // Release the fake so task A can finish; task B, previously blocked
+        // on the mutex, will then be scheduled and complete too.
+        fake.release();
+
+        let a_err = task_a.await.expect("task A panicked");
+        let b_err = task_b.await.expect("task B panicked");
+        assert!(a_err && b_err, "both callers must see unknown-kid error");
+        assert_eq!(
+            fake.hit_count(),
+            1,
+            "only one outbound attempt allowed under singleflight"
+        );
+    }
 }

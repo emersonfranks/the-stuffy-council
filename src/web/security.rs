@@ -14,8 +14,15 @@ use crate::config::Environment;
 ///
 /// * default-src 'self' — everything must come from our origin unless overridden.
 /// * script-src 'self' https://unpkg.com https://accounts.google.com/gsi/client
-///   — HTMX from unpkg + the GIS client library. Both are pinned to the
-///   specific paths they load from; no whole-origin allowlist.
+///   — HTMX from unpkg + the GIS client library. Path components ARE enforced
+///   by browsers on the initial request (W3C CSP L3 §6.7.2.7, §6.7.2.12), so
+///   this restricts scripts to those two exact URLs; a compromise elsewhere on
+///   `accounts.google.com` cannot serve script into our pages without also
+///   controlling `/gsi/client`. CAVEAT: paths are IGNORED after a redirect
+///   (§7.6), so if Google ever 302s `/gsi/client` to another path on the same
+///   host the browser will still load it — which is fine here because we trust
+///   the whole `accounts.google.com` origin, and the pinning is just
+///   defense-in-depth against upstream URL surface expansion.
 /// * style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/style
 ///   — Tailwind CDN + Askama-embedded style attributes + GIS button styles.
 ///   TODO: swap the Tailwind CDN for a self-built stylesheet before production so we can drop 'unsafe-inline'.

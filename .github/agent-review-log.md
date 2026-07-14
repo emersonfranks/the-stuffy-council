@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -514,6 +514,111 @@ reviewer finding.
   requiring written justification for any other timing-dependent
   construct.
 - status: Fixed
+
+## 2026-07-14 — disposition-copilot-pr1-review
+
+- Author model:   Claude Opus 4.7 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot), then GPT-5.5 (copilot) after BLOCK fix
+- Delegated:      no
+- Files:
+  - migrations/0002_google_auth.sql
+  - src/auth.rs
+  - src/web/security.rs
+
+Change dispositions four inline findings that GitHub Copilot's automated
+reviewer left on PR #1 (`feat/google-auth`) just before merge:
+
+- **Copilot F1** (MINOR, migrations/0002_google_auth.sql:16) — column comment
+  referenced the pre-GIS `userinfo` flow + non-existent `config.rs`
+  allowlist check. **status: Fixed** — comment now points at
+  `verify_id_token` + `AccessList`.
+- **Copilot F2 + F4** (src/web/security.rs:18 and :35) — claimed browsers
+  ignore path components in CSP source expressions. **status: Rejected
+  (factually incorrect per W3C CSP L3 §6.7.2.7 step 4.6 and §6.7.2.12;
+  paths ARE enforced on initial requests, ignored ONLY after redirect per
+  §7.6).** Kept the path pinning; tightened the doc comment to describe
+  what browsers actually enforce plus the redirect caveat.
+- **Copilot F3** (MAJOR, src/auth.rs:107, `JwkCache::get_or_refresh`) —
+  amplification: unknown-`kid` POSTs triggered an outbound Google fetch
+  per miss. **status: Fixed** — added `JWKS_REFRESH_COOLDOWN`,
+  `last_refresh_attempt`, `refresh_mutex`, and `refresh_if_stale`, and
+  reworked `get_or_refresh` to route through them.
+
+### Findings
+
+#### F1 — BLOCK | security | src/auth.rs:126 | Failed JWKS refreshes bypass the cooldown
+- what: `last_refresh` was updated only on refresh success, so a returning-500
+  upstream let every queued unknown-`kid` request perform another outbound
+  fetch after acquiring the mutex.
+- why:  agent-authoring.instructions.md permits BLOCK for security holes and
+  requires safety comments to preserve true invariants — the documented "at
+  most one outbound fetch per cooldown window" invariant was false during
+  upstream failure.
+- fix:  Rename `last_refresh` → `last_refresh_attempt` and update it at the
+  START of `refresh()`, before the outbound send. Failed attempts now also
+  count against the cooldown budget.
+- status: Fixed (src/auth.rs; verified by new test
+  `upstream_500_still_counts_against_cooldown`)
+
+#### F2 — BLOCK | tests | src/auth.rs:329 | Tests didn't reproduce the amplification path
+- what: The initial tier-1 tests only drove `should_refresh` and
+  `refresh_if_stale` directly. Reverting `get_or_refresh` to call
+  unconditional `refresh()` would have left every new test green.
+- why:  agent-authoring.instructions.md requires every bug fix to land with
+  a regression test reproducing the original failure path; absence is BLOCK.
+  test-quality.instructions.md also mandates state-transition and dependency-
+  failure coverage.
+- fix:  Add a fake JWKS server (`FakeJwks` in `src/auth.rs`
+  `#[cfg(test)] mod tests`) with a hit counter and configurable response
+  (200 empty-keys or 500). New tests drive `get_or_refresh` end-to-end and
+  assert the hit count matches the amplification cap.
+- status: Fixed (src/auth.rs; new tests
+  `flood_of_unknown_kids_produces_one_upstream_fetch`,
+  `upstream_500_still_counts_against_cooldown`,
+  `concurrent_misses_collapse_to_one_upstream_fetch`,
+  `miss_after_cooldown_expiry_permits_second_attempt`)
+
+#### F3 — MAJOR | correctness | src/auth.rs:169 | Cooldown check ran outside mutex; late misser could race in-flight refresh
+- what: With the cooldown check outside the mutex, a late-arriving misser
+  could observe `last_refresh_attempt` being set (recorded at the start of
+  an in-flight `refresh()`), skip the mutex, and read the still-empty keys
+  map for a spurious "kid not found" while the refresh was mid-flight.
+- why:  agent-authoring.instructions.md elevates missing test coverage on
+  `src/auth.rs` to MAJOR; test-quality.instructions.md requires state-
+  transition coverage for the concurrent-refresh path.
+- fix:  Acquire `refresh_mutex` unconditionally on cache miss, THEN check
+  the cooldown inside the mutex. Late arrivers now wait for any in-flight
+  refresh to publish its keys before re-reading the cache.
+- status: Fixed (src/auth.rs; new test `late_arriver_waits_for_in_flight_refresh`
+  uses a `Notify`-gated fake to prove task B blocks on the mutex until task A
+  releases)
+
+#### F4 — MINOR | tests | src/auth.rs:460 | Regression tests discarded `get_or_refresh` results with `let _ = …`
+- what: Four new regression tests only asserted the upstream hit count and
+  ignored the per-call return value, silently tolerating unexpected `Ok`
+  results.
+- why:  test-quality.instructions.md explicitly bans "Silent failure
+  tolerance — `let _ = sut.do();` without asserting" and requires dependency-
+  failure paths to validate observable propagation.
+- fix:  Replace `let _ = …` with explicit `assert!(result.is_err(), …)`
+  (and, for the spawned-task variant, return a bool from the task and
+  assert after join).
+- status: Fixed (src/auth.rs; applied to
+  `upstream_500_still_counts_against_cooldown`,
+  `concurrent_misses_collapse_to_one_upstream_fetch`,
+  `miss_after_cooldown_expiry_permits_second_attempt`, and the new
+  `late_arriver_waits_for_in_flight_refresh`)
+
+#### F5 — NIT | docs | src/auth.rs:166 | `refresh_if_stale` return-value comment overstated success semantics
+- what: The comment said `Ok(true)` covered "whether it succeeded or
+  failed", but `self.refresh().await?` returns `Err` on failure.
+- why:  agent-authoring.instructions.md says comments must help future
+  agents preserve behavior; inaccurate comments should be corrected or
+  removed.
+- fix:  Rewrote the comment to enumerate Ok(true) / Ok(false) / Err(_)
+  explicitly and to state that `Err` still consumed the cooldown budget
+  because `refresh()` records attempt time before the outbound send.
+- status: Fixed (src/auth.rs)
 
 (Log grows from here.)
 

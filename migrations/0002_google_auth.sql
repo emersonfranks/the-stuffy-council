@@ -11,9 +11,10 @@ DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Gmail address as returned by Google's `userinfo` endpoint. NOCASE so
-    -- lookups are case-insensitive; the allowlist check in config.rs
-    -- lowercases both sides too as defense-in-depth.
+    -- Email from the verified Google ID token JWT (`email` claim, only trusted
+    -- once `email_verified` is true — see src/auth.rs::verify_id_token).
+    -- NOCASE so lookups are case-insensitive; src/access.rs::AccessList also
+    -- lowercases both sides as defense-in-depth.
     email           TEXT    NOT NULL UNIQUE COLLATE NOCASE,
     -- Google's stable OpenID Connect subject id. Never changes for a
     -- given Google account; the email address CAN change on their side.
