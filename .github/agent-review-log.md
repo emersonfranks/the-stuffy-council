@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: Claude Opus 4.7 (copilot)
 
 # Agent Review Log
 
@@ -619,6 +619,98 @@ reviewer left on PR #1 (`feat/google-auth`) just before merge:
   explicitly and to state that `Err` still consumed the cooldown budget
   because `refresh()` records attempt time before the outbound send.
 - status: Fixed (src/auth.rs)
+
+## 2026-07-14 — dev-setup-runbook
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol → GPT-5.5 → Claude Opus 4.7 (copilot)
+  (two BLOCK-triggered follow-ups; final review NO FINDINGS)
+- Delegated:      no
+- Files:
+  - docs/dev-setup.md (new)
+  - AGENTS.md (## Local dev slimmed to a pointer)
+  - README.md (runbook pointer + OS-agnostic Ollama-start step)
+
+Adds a zero-to-running dev runbook (backlog #19, scoped up to a full
+machine-setup doc at the owner's request) and repoints README + AGENTS.md
+at it instead of duplicating the steps. The runbook is the one deliberate
+human-facing artifact in the repo; noted as such in its header so the
+agents-only audience rule isn't misread as a violation.
+
+### Findings
+
+#### F1 — BLOCK | security | docs/dev-setup.md | PowerShell SESSION_SECRET was 62 chars + non-CSPRNG
+- what: `Get-Random -Count 96` on the 62-char alphabet returns all 62
+  (PowerShell caps -Count at collection size), failing the 64-char
+  minimum; `Get-Random` is also not a CSPRNG.
+- why:  AGENTS.md ground rule 6 (real 64+ char SESSION_SECRET); the
+  command both fails boot and is unfit for key material.
+- fix:  Replaced with a CSPRNG hex one-liner
+  (`RandomNumberGenerator.Create().GetBytes` → 128 hex chars), verified
+  to run on PS 5.1 + 7.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F2 — BLOCK | correctness | docs/dev-setup.md | Google setup omitted consent screen + test users
+- what: The client-id steps skipped OAuth-consent-screen config and the
+  test-user enumeration an External+Testing app needs, which blocks the
+  Step 8 sign-in on a fresh project.
+- why:  Concrete setup omission that breaks the runbook's end-to-end promise.
+- fix:  Expanded Step 4 to configure the consent screen (External, app
+  name, support/dev email) and add the sign-in Gmail as a test user before
+  creating the Web-application client.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F3 — BLOCK | correctness | README.md | condensed quick start ran `ollama serve` unconditionally
+- what: Windows already runs Ollama as a service, so a bare `ollama serve`
+  errors on the socket and contradicts the runbook.
+- why:  Factually wrong command on a supported path.
+- fix:  README step 2 became verify-first (`/api/version`), serve only if
+  down. Superseded by F6's uniform cross-OS wording.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F4 — BLOCK | docs | docs/dev-setup.md | Windows shell unspecified for POSIX commands
+- what: Most commands use `curl` flags, `\` continuations, `grep`, `rm -f`
+  that break in Windows PowerShell.
+- why:  Runbook promises copy-pasteable Windows setup.
+- fix:  Prerequisites now states unlabeled commands run in Git Bash on
+  Windows; only PowerShell-labeled ones run in PowerShell.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F5 — MINOR | correctness | docs/dev-setup.md | timing/VRAM claims were CPU-unaware
+- what: "~30–60 s / loads into VRAM" ignored the documented CPU fallback,
+  which can exceed the default 120 s OLLAMA_TIMEOUT_SECS.
+- why:  Authoring policy requires factual docs.
+- fix:  All three timing spots now qualify GPU vs CPU and point at
+  OLLAMA_TIMEOUT_SECS.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F6 — BLOCK | correctness | README.md + docs/dev-setup.md | Linux `ollama serve` could re-create the port clash
+- what: After F3, README still told Linux users to run `ollama serve`, but
+  the Linux installer starts a systemd unit → same 11434 conflict; and the
+  runbook gave no non-systemd fallback.
+- why:  Factual-doc rule; both systemd and non-systemd Linux were wrong.
+- fix:  Unified the guidance everywhere: the OS service/app/unit starts
+  Ollama; verify `/api/version` first; run `ollama serve` only if that
+  fails. Runbook 3a dropped its per-OS "Server start" column for that rule.
+- status: Fixed (reviewer: GPT-5.5)
+
+#### F7 — MINOR | correctness | docs/dev-setup.md | test-user note tied to verification not Testing status
+- what: "unverified External app" conflated verification with the Testing
+  publishing status that actually imposes the test-user gate.
+- why:  Google separates the two axes.
+- fix:  Reworded to "an External app in **Testing** only lets test users
+  through."
+- status: Fixed (reviewer: GPT-5.5)
+
+#### F8 — MINOR | correctness | docs/dev-setup.md | "later calls are fast" absolute
+- what: Skipping model load doesn't make CPU inference fast.
+- why:  Factual-doc rule.
+- fix:  Changed to "later calls skip the model-load delay."
+- status: Fixed (reviewer: GPT-5.5)
+
+Third review (Claude Opus 4.7) independently re-verified all fixes, links,
+anchors, the PowerShell one-liner, and whole-doc accuracy against config.rs
+/ db.rs / main.rs → NO FINDINGS.
 
 (Log grows from here.)
 

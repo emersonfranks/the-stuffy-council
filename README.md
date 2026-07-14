@@ -26,6 +26,11 @@ open-source LLM (Ollama) for the story text.
 
 ## Quick start
 
+> **Fresh machine?** Follow the full runbook — Rust, Ollama, Google OAuth,
+> `.env`, allowlist, with a per-step verify + troubleshooting table:
+> [docs/dev-setup.md](docs/dev-setup.md). The condensed version below
+> assumes Rust and Ollama are already installed.
+
 ```bash
 # 1. Config
 cp .env.example .env
@@ -39,8 +44,11 @@ cp .env.example .env
 # Then edit `authorized-users.toml` at the repo root and add your Gmail
 # address (commit + PR for teammates; ship as one). No env-var allowlist.
 
-# 2. Start Ollama in another terminal
-ollama serve
+# 2. Make sure Ollama is running:
+#      curl http://127.0.0.1:11434/api/version
+#    The macOS app / Linux systemd unit / Windows service usually start it
+#    for you; if that curl fails, start it manually with `ollama serve`.
+#    See docs/dev-setup.md step 3 for details.
 
 # 3. Run the app
 cargo run
