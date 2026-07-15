@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -935,4 +935,21 @@ authenticated `/council/{id}` request through the full router.
 - fix:  Added one integration test per candidate asserting HTTP 200,
   `image/png`, and the PNG byte signature through `stuffy_council::serve`.
 - status: Fixed
+
+## 2026-07-15 — Ruff Ruff Pog label
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - cast/ruff-ruff.toml
+  - .github/agent-review-log.md
+
+Change summary: changed Ruff Ruff's displayed species from "worn beige plush
+dog" to "worn beige plush Pog", matching the existing lore that he is a Pog
+(Person Dog). `cargo check` green.
+
+### Findings
+
+NO FINDINGS
 
