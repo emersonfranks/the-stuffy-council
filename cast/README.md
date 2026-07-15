@@ -29,7 +29,7 @@ faction_role = "leader"         # "leader" or "member"
 on_council   = true             # default true; Ruff Ruff is famously false
 
 # Visuals (optional)
-image = "woofy.png"                       # file under /static/stuffies/
+image = "woofy.png"                       # file under /static/stuffies/ — art spec in ../docs/character-art.md
 color_palette = ["dove-gray", "cloud-white", "pink-ear"]
 
 # Personality (all optional except speech_style)
@@ -59,6 +59,9 @@ Supreme Leader of the Universe...
 - **Keep `lore` under ~6 short sentences.** It's fed straight into the prompt.
 - **Every `relationships[].with` MUST reference another character's id.**
   The loader fails hard on dangling references.
+- **Character art (the `image` file) is generated to a fixed spec.** Prompts,
+  the house style, and per-character identity locks live in
+  [../docs/character-art.md](../docs/character-art.md).
 
 The Rust side validates these files on startup — malformed TOML, missing
 required fields (`name`, `species`, `title`, `role`, `speech_style`), or

@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -834,4 +834,37 @@ rule in AGENTS.md (ground rule 8). Prior overlapping-file finding F10
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-15 — character-art-bible
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - docs/character-art.md (new)
+  - cast/README.md
+
+Change summary: added a durable art bible (`docs/character-art.md`) that
+defines how per-character image assets are generated — asset spec, a
+fixed house-style block and global negatives to reuse verbatim, a
+prompt formula whose only variable is the `Shot:` line, consistency
+rules, per-character identity locks (Bar Bar / Woofy / Ruff Ruff built
+from their reference photos), variant naming, and operational notes
+(#10 `.gitattributes` binary guard before committing PNGs; AGENTS.md
+rule 5 no-weapons steer for Woofy; templates don't render `image` yet).
+Cross-linked from `cast/README.md` (schema comment + Editing bullet).
+No code touched.
+
+### Findings
+
+#### F1 — MINOR | agent-authoring | docs/character-art.md:41 | rule named specific real people where a generic rule suffices
+- what: The "Humans get no portrait" bullet named "Lennon and Dad" as
+  the real people, when the rule holds for any `kind = "human"`.
+- why:  agent-authoring compliance (avoid embedding personal
+  identifiers where a generic, more maintainable rule works); the
+  generic form also survives adding a third human without an edit.
+- fix:  Reworded to "Human characters (`kind = \"human\"`) are real
+  people; they keep the silhouette placeholder and carry no `image`
+  field."
+- status: Fixed
 
