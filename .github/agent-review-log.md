@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -806,4 +806,32 @@ loosening; no build pipeline. #9 may vendor full Tailwind later.
 - status: Fixed (reviewer: GPT-5.5)
 
 (Log grows from here.)
+
+## 2026-07-15 — pr24-copilot-review-fixes
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - static/app.css
+  - templates/council.html
+
+Change summary: addressed the three GitHub Copilot automated review
+comments on PR #24. (1) Removed `border-radius: var(--radius-sm)` from
+the global `:focus-visible` / `.sc-card:focus-within` rule so the focus
+outline follows each control's own radius instead of reshaping focused
+pills and cards; added a do-not-re-add invariant comment. (2) Rewrote
+the `static/app.css` header comment, which was both truncated mid-
+sentence and contained a personal identifier (named child + age), into
+a complete agent-facing tone description with no personal data and no
+dangling reference. (3) Fixed the `council.html` empty-state hint from
+`cast/<name>.toml` to `cast/<kebab-id>.toml` to match the stable-id
+rule in AGENTS.md (ground rule 8). Prior overlapping-file finding F10
+(visual-identity entry, authed view-model coverage) stays Deferred on
+#15 — unchanged, this change does not touch home.rs/characters.rs.
+`cargo check` clean; full `cargo test` green (37 unit + 10 integration).
+
+### Findings
+
+NO FINDINGS
 

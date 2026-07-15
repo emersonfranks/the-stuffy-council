@@ -1,8 +1,9 @@
 /*
  * The Stuffy Council — design system.
  *
- * Audience: Lennon (10) — Pokemon + Bee-and-Puppycat sensibility, cute but
- * not pink-heavy, artistic, sporty. See /memories/repo/design-brief or the
+ * Aesthetic target: a kid's Pokemon + Bee-and-Puppycat sensibility — cute but
+ * not pink-heavy, a little artistic and sporty.
+ *
  * Self-hosted — there is no Tailwind CDN (it was a <script> the CSP never
  * allowed). This file owns tokens, fonts, a small baseline reset, the themed
  * component primitives (prefixed `sc-`), and a Tailwind-compatible utility
@@ -183,14 +184,15 @@ h1, h2, h3 {
 
 a { color: inherit; text-decoration: none; }
 
-/* Visible focus for every interactive element (a11y). */
+/* Visible focus for every interactive element (a11y). Do not set
+   border-radius here — the outline already follows each control's own radius,
+   and forcing one reshapes focused pills (.sc-btn) and cards (.sc-card). */
 a:focus-visible,
 button:focus-visible,
 [tabindex]:focus-visible,
 .sc-card:focus-within {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 
 /* ---- Chrome: masthead + sign-out chip ---- */
