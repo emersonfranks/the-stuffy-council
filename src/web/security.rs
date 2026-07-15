@@ -23,9 +23,11 @@ use crate::config::Environment;
 ///   host the browser will still load it — which is fine here because we trust
 ///   the whole `accounts.google.com` origin, and the pinning is just
 ///   defense-in-depth against upstream URL surface expansion.
-/// * style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/style
-///   — Tailwind CDN + Askama-embedded style attributes + GIS button styles.
-///   TODO: swap the Tailwind CDN for a self-built stylesheet before production so we can drop 'unsafe-inline'.
+/// * style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style
+///   — our self-hosted /static/app.css loads via 'self'; 'unsafe-inline' is
+///   now required ONLY by the GIS button's injected inline styles (there is no
+///   Tailwind CDN anymore — it was a <script> this CSP never allowed). #9 can
+///   pin GIS and drop 'unsafe-inline'.
 /// * img-src 'self' data: https://*.googleusercontent.com — user avatars appear on the GIS personalized button.
 /// * connect-src 'self' https://accounts.google.com/gsi/ — GIS auxiliary fetches (revocation, one-tap resources).
 /// * frame-src https://accounts.google.com/gsi/ — GIS renders its consent UI in an iframe.
@@ -37,7 +39,7 @@ use crate::config::Environment;
 const CSP: &str = "\
 default-src 'self'; \
 script-src 'self' https://unpkg.com https://accounts.google.com/gsi/client; \
-style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/style; \
+style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; \
 img-src 'self' data: https://*.googleusercontent.com; \
 font-src 'self' data:; \
 connect-src 'self' https://accounts.google.com/gsi/; \

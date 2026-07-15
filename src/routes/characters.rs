@@ -14,32 +14,37 @@ use crate::state::AppState;
 #[derive(Template)]
 #[template(path = "council.html")]
 struct CouncilTemplate<'a> {
-    display_name: String,
     characters: Vec<&'a Character>,
 }
 
 #[derive(Template)]
 #[template(path = "character.html")]
 struct CharacterTemplate<'a> {
-    display_name: String,
     character: &'a Character,
+    /// Relationships resolved to the target's display name (+ id for the
+    /// link). Built here because the template only holds one `Character` and
+    /// can't reach the registry to turn a `with` id into a name.
+    relationships: Vec<RelationshipView>,
+}
+
+struct RelationshipView {
+    id: String,
+    name: String,
+    bond: String,
 }
 
 pub async fn list_characters(
     State(state): State<AppState>,
     session: Session,
 ) -> AppResult<Response> {
-    let Some(user) = require_user(&session).await? else {
+    if require_user(&session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
-    };
+    }
 
     let mut characters: Vec<&Character> = state.cast.all().collect();
     characters.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let tpl = CouncilTemplate {
-        display_name: user.display_name,
-        characters,
-    };
+    let tpl = CouncilTemplate { characters };
     Ok(render(&tpl)?.into_response())
 }
 
@@ -48,15 +53,29 @@ pub async fn show_character(
     session: Session,
     Path(id): Path<String>,
 ) -> AppResult<Response> {
-    let Some(user) = require_user(&session).await? else {
+    if require_user(&session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
-    };
+    }
 
     let character = state.cast.get(&id).ok_or(AppError::NotFound)?;
 
+    let relationships = character
+        .relationships
+        .iter()
+        .map(|r| RelationshipView {
+            id: r.with.clone(),
+            name: state
+                .cast
+                .get(&r.with)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| r.with.clone()),
+            bond: r.bond.clone(),
+        })
+        .collect();
+
     let tpl = CharacterTemplate {
-        display_name: user.display_name,
         character,
+        relationships,
     };
     Ok(render(&tpl)?.into_response())
 }

@@ -81,6 +81,24 @@ impl Character {
         self.kind == "human"
     }
 
+    /// Faction → design-system accent token, matching the `[data-accent="…"]`
+    /// selectors in static/app.css. Deterministic so a character's card color
+    /// is stable across renders. Known factions match exactly (normalized:
+    /// trimmed + lowercased) to avoid substring collisions — e.g. "Dog Squad"
+    /// must NOT read as "The OG". Any other named faction gets `blossom`;
+    /// factionless characters (the humans) get the default `mint`. Keep the
+    /// returned set (`mint`/`lavender`/`peach`/`blossom`) in sync with that CSS.
+    pub fn accent(&self) -> &'static str {
+        let normalized = self.faction.as_deref().map(|f| f.trim().to_ascii_lowercase());
+        match normalized.as_deref() {
+            Some("avocatts") => "mint",
+            Some("teeturtles") => "lavender",
+            Some("the og") => "peach",
+            Some(_) => "blossom",
+            None => "mint",
+        }
+    }
+
     /// Renders this character as a compact brief for the LLM prompt.
     ///
     /// We do not include raw model output back into prompts, and this method is
@@ -224,4 +242,63 @@ fn validate_id(id: &str) -> Result<()> {
         return Err(anyhow!("id `{id}` must not start or end with a hyphen"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Coverage dimensions (see .github/instructions/test-quality.instructions.md):
+    // accent() is a pure, total faction→token mapping. Functional (each known
+    // faction), edge (case/whitespace, substring collision), and negative
+    // (unknown, none) dimensions are covered below. Error-handling and
+    // state-transition dimensions are N/A — the function is infallible and
+    // holds no state.
+    use super::*;
+
+    fn character_in_faction(faction: Option<&str>) -> Character {
+        Character {
+            id: "x".into(),
+            name: "X".into(),
+            species: "s".into(),
+            title: "t".into(),
+            kind: "stuffy".into(),
+            image: None,
+            color_palette: vec![],
+            traits: vec![],
+            speech_style: "s".into(),
+            fears: vec![],
+            loves: vec![],
+            catchphrase: None,
+            role: "r".into(),
+            faction: faction.map(str::to_string),
+            faction_role: None,
+            on_council: true,
+            relationships: vec![],
+            lore: None,
+        }
+    }
+
+    #[test]
+    fn accent_maps_each_known_faction_to_a_distinct_token() {
+        assert_eq!(character_in_faction(Some("Avocatts")).accent(), "mint");
+        assert_eq!(character_in_faction(Some("TeeTurtles")).accent(), "lavender");
+        assert_eq!(character_in_faction(Some("The OG")).accent(), "peach");
+    }
+
+    #[test]
+    fn accent_ignores_case_and_surrounding_whitespace() {
+        assert_eq!(character_in_faction(Some("  avocatts ")).accent(), "mint");
+    }
+
+    #[test]
+    fn accent_unknown_named_faction_falls_back_to_blossom() {
+        assert_eq!(character_in_faction(Some("Sparkle Squad")).accent(), "blossom");
+        // Regression: a name merely CONTAINING "og" (e.g. "Dog Squad") must not
+        // be misread as "The OG" — exact matching, not substring.
+        assert_eq!(character_in_faction(Some("Dog Squad")).accent(), "blossom");
+    }
+
+    #[test]
+    fn accent_factionless_character_uses_default_mint() {
+        assert_eq!(character_in_faction(None).accent(), "mint");
+    }
 }

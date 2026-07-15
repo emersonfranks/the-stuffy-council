@@ -36,7 +36,7 @@ The running review log lives at
 | Auth               | Google Identity Services (client-side JWT) + committed allowlist |
 | LLM                | Ollama HTTP API (`/api/generate`, `stream=false`) |
 | Rate limiting      | `tower_governor` per client IP             |
-| Styling            | Tailwind (CDN for now — vendor before production) |
+| Styling            | Self-hosted `static/app.css` (design tokens + Tailwind-compatible utility subset) |
 | Testing            | Built-in `cargo test`; unit tests inline, integration in `tests/*.rs` |
 | Deploy target      | Azure Container Apps (Ollama runs external) |
 
@@ -180,8 +180,9 @@ orientation in [docs/testing/README.md](docs/testing/README.md).
 ## Non-goals (for now)
 
 * No public signup — this is a closed roster.
-* No JS build pipeline — HTMX + a Tailwind CDN link. Introduce a real
-  build only when we outgrow this.
+* No JS build pipeline — HTMX (unpkg) + a self-hosted `static/app.css`
+  (the Tailwind Play CDN was removed; #9 may vendor the full Tailwind
+  build). Introduce a real build only when we outgrow this.
 * No public API — only server-rendered HTML routes.
 * No image generation in-process — image links point at pre-generated
   files under `/static/stuffies/` if present.

@@ -6,30 +6,38 @@
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-md bg-white/70 backdrop-blur rounded-2xl shadow-md p-8 border border-white">
-  <h1 class="text-2xl font-semibold text-slate-800">The Stuffy Council</h1>
-  <p class="mt-1 text-sm text-slate-500">Family sign-in only.</p>
+<div class="mx-auto max-w-md">
+  <div class="sc-card sc-card--pad-lg text-center">
+    <img src="/static/img/favicon.svg" alt="" width="64" height="64" class="mx-auto" />
+    <p class="sc-eyebrow mt-4">The Stuffy Council</p>
+    <h1 class="sc-hero mt-1">The Council is expecting you.</h1>
+    <p class="sc-lede mt-3">Family sign-in only — one warm little corner of the internet.</p>
 
-  {% match error %}
-    {% when Some with (msg) %}
-      <p class="mt-4 rounded-md bg-rose-100 text-rose-800 text-sm px-3 py-2">{{ msg }}</p>
-    {% when None %}
-  {% endmatch %}
+    {% match error %}
+      {% when Some with (msg) %}
+        <p class="sc-alert sc-alert--denied mt-5" role="alert">{{ msg }}</p>
+      {% when None %}
+    {% endmatch %}
 
-  <div id="g_id_onload"
-       data-client_id="{{ google_client_id }}"
-       data-login_uri="{{ login_uri }}"
-       data-context="signin"
-       data-ux_mode="redirect"
-       data-auto_prompt="false">
-  </div>
-  <div class="g_id_signin mt-6"
-       data-type="standard"
-       data-shape="rectangular"
-       data-theme="filled_blue"
-       data-text="signin_with"
-       data-size="large"
-       data-logo_alignment="left">
+    <div class="mt-7 flex justify-center">
+      <div>
+        <div id="g_id_onload"
+             data-client_id="{{ google_client_id }}"
+             data-login_uri="{{ login_uri }}"
+             data-context="signin"
+             data-ux_mode="redirect"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="pill"
+             data-theme="filled_blue"
+             data-text="signin_with"
+             data-size="large"
+             data-logo_alignment="left">
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

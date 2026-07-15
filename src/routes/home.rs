@@ -7,6 +7,7 @@ use time::OffsetDateTime;
 use tower_sessions::Session;
 
 use crate::auth::{SESSION_USER_KEY, SessionUser};
+use crate::cast::Character;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::story_repo;
@@ -14,18 +15,20 @@ use crate::web::csrf;
 
 #[derive(Template)]
 #[template(path = "home.html")]
-struct HomeTemplate {
+struct HomeTemplate<'a> {
     display_name: String,
     csrf_token: String,
     has_today: bool,
     today_title: String,
     today_iso: String,
+    /// On-council cast for the spotlight strip. Borrows the registry, which
+    /// lives as long as `state` for the duration of the handler.
+    spotlight: Vec<&'a Character>,
 }
 
 #[derive(Template)]
 #[template(path = "story.html")]
 struct StoryTemplate {
-    display_name: String,
     csrf_token: String,
     title: String,
     body_paragraphs: Vec<String>,
@@ -42,20 +45,24 @@ pub async fn index(State(state): State<AppState>, session: Session) -> AppResult
     let today = OffsetDateTime::now_utc().date();
     let cached = story_repo::get(&state.db, today).await?;
 
+    let mut spotlight: Vec<&Character> = state.cast.all().filter(|c| c.on_council).collect();
+    spotlight.sort_by(|a, b| a.name.cmp(&b.name));
+
     let tpl = HomeTemplate {
         display_name: user.display_name,
         csrf_token: csrf::token(&session).await?,
         has_today: cached.is_some(),
         today_title: cached.as_ref().map(|c| c.title.clone()).unwrap_or_default(),
         today_iso: today.to_string(),
+        spotlight,
     };
     Ok(render(&tpl)?.into_response())
 }
 
 pub async fn today(State(state): State<AppState>, session: Session) -> AppResult<Response> {
-    let Some(user) = require_user(&session).await? else {
+    if require_user(&session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
-    };
+    }
 
     let today = OffsetDateTime::now_utc().date();
 
@@ -92,7 +99,6 @@ pub async fn today(State(state): State<AppState>, session: Session) -> AppResult
         .collect();
 
     let tpl = StoryTemplate {
-        display_name: user.display_name,
         csrf_token: csrf::token(&session).await?,
         title,
         body_paragraphs,
