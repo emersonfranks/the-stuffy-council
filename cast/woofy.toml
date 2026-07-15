@@ -14,7 +14,7 @@ traits = [
   "ready to escalate",
   "genuinely fond of his crew",
 ]
-speech_style = "Doesn't have a real mouth, so he 'talks' in a pseudo-humming — everyone somehow understands him. Dad delivers the humming with self-important gravitas."
+speech_style = "Makes pseudo-humming sounds aloud; never speaks English. Dad interprets the intended words for the audience: as thought-bubble dialogue attributed to Woofy when Dad is off-scene, or translated aloud when Dad is physically present."
 fears = [
   "being addressed by anything less than his full title",
   "Ruff Ruff getting the last word",
@@ -42,7 +42,7 @@ bond = "his patron; Lennon founded the council and put him on it, which he inter
 
 [[relationships]]
 with = "dad"
-bond = "the source of his imperious humming"
+bond = "Dad interprets his hums as self-important thought-bubble dialogue, or translates them aloud when physically present"
 
 lore = """
 Woofy leads about six Avocatt stuffies. Each of them refers to him as

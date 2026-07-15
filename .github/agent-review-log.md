@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -952,4 +952,67 @@ dog" to "worn beige plush Pog", matching the existing lore that he is a Pog
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-15 — stuffy voice and thought-bubble canon
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/woofy.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/dad.toml
+  - cast/lennon.toml
+  - cast/README.md
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: encoded the canon that Ruff Ruff is the only stuffy with
+literal voiced English; Dad performs that voice. Every other stuffy makes
+only its native sounds/language aloud. When Dad is off-scene, his interpreted
+English appears as thought-bubble-equivalent prose attributed to the stuffy
+without placing Dad in the scene; when physically present, Dad may translate
+aloud. Story-scene art uses post-generation typed overlays rather than
+model-rendered text. Updated all affected cast briefs/relationships, the
+story prompt, schema example, and art guidance. A temporary-cast unit test
+asserts the complete composed prompt contract. `cargo check` green; 44 unit +
+12 integration tests green; clippy has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — MINOR | correctness | cast/dad.toml | title implied Dad voices the entire crew
+- what: "The Voice and Interpreter Behind the Crew" could scope "Voice" to
+  every stuffy and steer the small model toward voiced English.
+- why:  Ruff Ruff alone has Dad-performed literal dialogue.
+- fix:  Changed the title to "Ruff Ruff's Voice and the Crew's Interpreter."
+- status: Fixed
+
+#### F2 — MINOR | correctness | cast/woofy.toml + cast/bar-bar.toml | relationship subjects were ambiguous
+- what: "interprets his hums" / "interprets each tonal Bar" could make the
+  stuffy appear to interpret itself.
+- why:  Dad is the interpreter; relationship briefs go directly to the model.
+- fix:  Began both bonds with the explicit subject "Dad" and named what he
+  translates.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | regression test bypassed build_prompt and off-scene invariants
+- what: Constant-fragment assertions could pass while the composed World or
+  character-brief prompt regressed.
+- why:  Test-quality policy requires robust coverage of the modified public
+  prompt builder.
+- fix:  Replaced it with a temporary three-character registry and asserted
+  the complete final prompt: native cue, off-scene non-presence, thought
+  bubble, Dad-present translation, World block, and injected Woofy brief.
+- status: Fixed
+
+#### F4 — MINOR | docs | docs/character-art.md | overlay metadata did not preserve bubble semantics
+- what: Generic dialogue/sound metadata could not deterministically choose
+  native text, a stuffy thought bubble, or Dad's speech bubble.
+- why:  Visual semantics must survive when text is overlaid after generation.
+- fix:  Required typed overlay records with kind (`native_sound`, `thought`,
+  `speech`), attributed character id, text, anchor point, and placement
+  rectangle.
+- status: Fixed
 

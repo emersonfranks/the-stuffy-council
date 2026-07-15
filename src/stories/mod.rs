@@ -105,8 +105,9 @@ impl StoryService {
             prompt.push_str("## The World\n\n");
             prompt.push_str(
                 "The stuffies live in Lennon's home. Lennon's imagination is \
-                 what animates them. Dad is the voice behind many of them and \
-                 the narrator of their adventures. These characters are ALWAYS \
+                 what animates them. Dad gives Ruff Ruff his literal voice, \
+                 interprets every other stuffy's sounds for the audience, and \
+                 narrates their adventures. These characters are ALWAYS \
                  present in the world; they may or may not be central to today's \
                  story but their personalities and dynamics shape everything.\n\n",
             );
@@ -183,9 +184,19 @@ young girl named Lennon. Each day one small adventure or quiet moment \
 unfolds among them. Your job is to write today's story.
 
 Rules:
-* Stay in-character for every listed character. Match their voice \
-  exactly — Woofy hums, Bar Bar speaks by repeating his own name in \
-  varied tones, Ruff Ruff talks like Dad but a bit higher.
+* Ruff Ruff is the ONLY stuffy with literal voiced English dialogue. Dad \
+  performs his voice slightly higher and cracked.
+* Every other stuffy makes only the sounds or language in their character \
+  brief. Woofy hums; Bar Bar says variations of his own name. They NEVER \
+  speak English aloud.
+* When Dad is not physically in the scene, show a non-Ruff-Ruff stuffy's \
+  intended words as thought-bubble-equivalent prose attributed directly to \
+  that stuffy. Include a small audible sound cue, then write, for example: \
+  `Woofy gave an imperious hum. His thought bubble read, \"The agenda is \
+  obvious.\"` Dad's interpretation is the narrative mechanism; it does NOT \
+  place him in the scene.
+* When Dad is physically in the scene, he may translate a stuffy's sounds \
+  aloud instead of using thought-bubble prose.
 * Playful chaos is welcome: bickering, boasting, silly power grabs, \
   absurd mock-conflicts. Ruff Ruff insisting he is the real leader is \
   a running theme.
@@ -233,4 +244,93 @@ fn parse_titled_output(raw: &str) -> (String, String) {
 
     // Fallback — use a stable placeholder title, keep full body.
     ("A Council Story".to_string(), cleaned.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    // The prompt contract is stateless canonical text. Functional and
+    // regression dimensions verify the literal-voice/thought-bubble rule in
+    // the fully composed prompt. Boundary, dependency-error, and
+    // state-transition dimensions are N/A.
+    use std::fs;
+    use std::path::Path as FsPath;
+
+    use tempfile::tempdir;
+    use time::Month;
+
+    use super::*;
+
+    struct UnusedGenerator;
+
+    #[async_trait]
+    impl StoryGenerator for UnusedGenerator {
+        fn model_id(&self) -> &str {
+            "unused"
+        }
+
+        async fn generate(&self, _prompt: &str) -> Result<String> {
+            panic!("prompt composition must not invoke the generator")
+        }
+    }
+
+    fn write_character(dir: &FsPath, id: &str, name: &str, kind: &str, speech_style: &str) {
+        let toml = format!(
+            "name = {name:?}\n\
+             species = \"test character\"\n\
+             title = \"test title\"\n\
+             kind = {kind:?}\n\
+             role = \"test role\"\n\
+             speech_style = {speech_style:?}\n"
+        );
+        fs::write(dir.join(format!("{id}.toml")), toml).expect("write cast fixture");
+    }
+
+    #[test]
+    fn build_prompt_encodes_stuffy_voice_and_interpretation_canon() {
+        let temp = tempdir().expect("temp dir");
+        write_character(
+            temp.path(),
+            "dad",
+            "Dad",
+            "human",
+            "Ruff Ruff's voice and interpreter of every other stuffy's sounds.",
+        );
+        write_character(
+            temp.path(),
+            "ruff-ruff",
+            "Ruff Ruff",
+            "stuffy",
+            "The only stuffy with literal voiced English dialogue.",
+        );
+        write_character(
+            temp.path(),
+            "woofy",
+            "Woofy",
+            "stuffy",
+            "Makes pseudo-humming sounds aloud and never speaks English.",
+        );
+        let cast = Arc::new(CastRegistry::load_from_dir(temp.path()).expect("load cast"));
+        let service = StoryService::new(Arc::new(UnusedGenerator), cast.clone());
+        let woofy = cast.get("woofy").expect("Woofy fixture");
+
+        let prompt = service.build_prompt(
+            Date::from_calendar_date(2026, Month::July, 15).expect("valid date"),
+            &[woofy],
+        );
+
+        assert!(prompt.contains(
+            "Ruff Ruff is the ONLY stuffy with literal voiced English dialogue"
+        ));
+        assert!(prompt.contains("They NEVER speak English aloud"));
+        assert!(prompt.contains("When Dad is not physically in the scene"));
+        assert!(prompt.contains("small audible sound cue"));
+        assert!(prompt.contains("His thought bubble read"));
+        assert!(prompt.contains("it does NOT place him in the scene"));
+        assert!(prompt.contains("When Dad is physically in the scene, he may translate"));
+        assert!(prompt.contains(
+            "Dad gives Ruff Ruff his literal voice, interprets every other stuffy's sounds"
+        ));
+        assert!(prompt.contains("Makes pseudo-humming sounds aloud and never speaks English"));
+        assert!(!prompt.contains("Bar Bar speaks by repeating his own name"));
+    }
 }

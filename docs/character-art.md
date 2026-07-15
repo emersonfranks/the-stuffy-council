@@ -41,6 +41,27 @@ Ruff Ruff → peach.
 - **Humans get no portrait.** Human characters (`kind = "human"`) are real
   people; they keep the silhouette placeholder and carry no `image` field.
 
+## Dialogue in story-scene art
+
+Portrait assets contain no text. Story-scene illustrations apply this canon
+as a deterministic layout overlay after image generation; do not ask the
+image model to draw letters.
+
+- Ruff Ruff is the only stuffy with literal voiced English dialogue. His words
+  use a speech bubble.
+- Every other stuffy makes its native sounds aloud. Put a small sound cue near
+  the character (for example, Woofy's hum or Bar Bar's tonal name), then put
+  Dad's interpreted English in a thought bubble pointing directly to the
+  stuffy. The thought bubble does not place Dad in the scene.
+- When Dad is physically present, he may translate the sound in his own speech
+  bubble instead of using the stuffy's thought bubble.
+- Scene-generation output must reserve bubble space and return typed overlay
+  records separately. Each record contains `kind` (`native_sound`, `thought`,
+  or `speech`), the attributed character id, text, an anchor point, and a
+  reserved placement rectangle. The application typesets these records so
+  wording stays legible, the correct bubble form survives generation, and
+  character identity is not coupled to model-rendered text.
+
 ## Style key (paste first, unchanged, every request)
 
 ```

@@ -18,7 +18,7 @@ name = "Woofy"
 species = "gray-and-white plush wolf (Avocatt)"
 title = "President of the Universe (self-declared)"
 role  = "leads a crew of roughly six Avocatt stuffies; considers himself the Supreme Leader of the Universe"
-speech_style = "Doesn't have a real mouth, so he 'talks' in a pseudo-humming..."
+speech_style = "Makes pseudo-humming sounds aloud; Dad interprets them as thought-bubble dialogue..."
 
 # Kind (optional; default "stuffy")
 kind = "stuffy"        # or "human"
