@@ -84,6 +84,65 @@ async fn get_login_returns_200_for_anonymous_visitor() -> Result<()> {
     Ok(())
 }
 
+/// Regression for the visual-identity work: the login page must link our
+/// self-hosted stylesheet and must NOT reference the Tailwind Play CDN (a
+/// `<script>` the CSP never allowed, so it never loaded).
+#[tokio::test]
+async fn login_links_local_css_and_drops_tailwind_cdn() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+    let body = client
+        .get(format!("http://{addr}/login"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    assert!(
+        body.contains("/static/app.css"),
+        "login page should link the self-hosted stylesheet. body: {body}"
+    );
+    assert!(
+        !body.contains("cdn.tailwindcss.com"),
+        "login page still references the Tailwind CDN. body: {body}"
+    );
+    Ok(())
+}
+
+/// Regression: the `/static` mount actually serves our stylesheet through the
+/// full middleware stack (it was never mounted before the visual-identity work).
+#[tokio::test]
+async fn static_stylesheet_is_served() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+    let resp = client
+        .get(format!("http://{addr}/static/app.css"))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), StatusCode::OK, "GET /static/app.css should 200");
+    let body = resp.text().await?;
+    assert!(
+        body.contains("--brand-council"),
+        "served /static/app.css should be our stylesheet; got: {}",
+        body.chars().take(120).collect::<String>()
+    );
+    Ok(())
+}
+
+/// The off-allowlist denial renders its in-voice message on the login page.
+#[tokio::test]
+async fn login_denied_error_renders_in_voice_copy() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+    let resp = client
+        .get(format!("http://{addr}/login?error=denied"))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.text().await?;
+    assert!(
+        body.contains("Google account"),
+        "the denied message (distinct from the base login copy) should render on /login?error=denied. body: {body}"
+    );
+    Ok(())
+}
+
 /// `/healthz` is public. If this 500s the wire-up is broken globally.
 #[tokio::test]
 async fn get_healthz_returns_200() -> Result<()> {

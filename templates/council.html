@@ -1,36 +1,45 @@
 {% extends "base.html" %}
-{% block title %}The Crew — The Stuffy Council{% endblock %}
+{% block title %}The Council — The Stuffy Council{% endblock %}
 
 {% block header %}
-<header class="flex items-baseline justify-between">
-  <div>
-    <a href="/" class="text-sm text-violet-600 hover:underline">&larr; Home</a>
-    <h1 class="mt-2 text-3xl font-semibold text-slate-800">The Crew</h1>
-    <p class="text-sm text-slate-500">Everyone who might turn up in a story.</p>
-  </div>
+<header class="sc-masthead">
+  <a href="/" class="sc-navlink">&larr; Home</a>
 </header>
 {% endblock %}
 
 {% block content %}
+<div class="mb-6">
+  <h1 class="sc-hero">The Council</h1>
+  <p class="sc-lede mt-2">Everyone who might turn up in tonight&rsquo;s story.</p>
+</div>
+{% if characters.is_empty() %}
+<div class="sc-card">
+  <div class="sc-empty">
+    <div class="sc-empty__art">🧸</div>
+    <p class="sc-empty__title">No council members yet</p>
+    <p class="sc-empty__body">Add a <code>cast/&lt;name&gt;.toml</code> file and they&rsquo;ll show up here.</p>
+  </div>
+</div>
+{% else %}
 <ul class="grid gap-4 sm:grid-cols-2">
   {% for character in characters %}
-    <li>
-      <a
-        href="/council/{{ character.id }}"
-        class="block rounded-2xl bg-white/70 backdrop-blur border border-white shadow-sm hover:shadow-md p-5 transition"
-      >
-        <div class="flex items-start justify-between gap-2">
-          <h2 class="text-lg font-semibold text-slate-800">{{ character.name }}</h2>
-          <div class="flex flex-wrap gap-1 justify-end">
-            {% if character.is_human() %}<span class="inline-block bg-amber-100 text-amber-800 rounded-full px-2 py-0.5 text-xs">human</span>{% endif %}
-            {% match character.faction %}{% when Some with (f) %}<span class="inline-block bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 text-xs">{{ f }}</span>{% when None %}{% endmatch %}
-            {% if !character.on_council %}<span class="inline-block bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 text-xs">off-council</span>{% endif %}
-          </div>
-        </div>
-        <p class="text-xs uppercase tracking-wide text-violet-500">{{ character.species }}</p>
-        <p class="mt-1 text-sm text-slate-600">{{ character.title }}</p>
-      </a>
-    </li>
+  <li class="sc-toon" data-accent="{{ character.accent() }}">
+    <div class="flex items-center gap-3">
+      <span class="sc-portrait sc-portrait--mini"><span class="sc-portrait__ph"></span></span>
+      <div>
+        <p class="sc-toon__name">{{ character.name }}</p>
+        <p class="sc-toon__meta">{{ character.species }}</p>
+      </div>
+    </div>
+    <p class="sc-toon__meta">{{ character.title }}</p>
+    <div class="flex flex-wrap gap-1.5">
+      {% if character.is_human() %}<span class="sc-badge">human</span>{% endif %}
+      {% match character.faction %}{% when Some with (f) %}<span class="sc-badge"><span class="sc-badge__dot"></span>{{ f }}</span>{% when None %}{% endmatch %}
+      {% if !character.on_council %}<span class="sc-badge sc-badge--offcouncil">off-council</span>{% endif %}
+    </div>
+    <a class="sc-toon__link" href="/council/{{ character.id }}" aria-label="Open {{ character.name }}&rsquo;s page"></a>
+  </li>
   {% endfor %}
 </ul>
+{% endif %}
 {% endblock %}

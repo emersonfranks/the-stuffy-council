@@ -46,9 +46,9 @@ pub async fn show_login(
         return Ok(Redirect::to("/").into_response());
     }
     let error = match q.error.as_deref() {
-        Some("denied") => Some("That Google account is not on the allowlist for this site."),
-        Some("csrf") => Some("Sign-in request failed a security check. Please try again."),
-        Some("google") => Some("Google sign-in failed. Please try again."),
+        Some("denied") => Some("That Google account isn’t on the Council’s list."),
+        Some("csrf") => Some("That sign-in didn’t look quite right — please try again."),
+        Some("google") => Some("Google sign-in hit a snag. Please try again."),
         _ => None,
     };
     let login_uri = format!("{}/auth/google/verify", state.config.public_origin);

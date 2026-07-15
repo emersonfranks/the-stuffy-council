@@ -2,36 +2,32 @@
 {% block title %}{{ title }} — The Stuffy Council{% endblock %}
 
 {% block header %}
-<header class="flex items-baseline justify-between">
-  <div>
-    <a href="/" class="text-sm text-violet-600 hover:underline">&larr; Home</a>
-    <p class="mt-2 text-xs uppercase tracking-wide text-slate-400">{{ date_display }}</p>
-  </div>
-  <nav class="text-sm space-x-4">
-    <a href="/council" class="text-violet-600 hover:underline">Meet the council</a>
-    <form method="post" action="/logout" class="inline">
+<header class="sc-masthead">
+  <a href="/" class="sc-navlink">&larr; Home</a>
+  <nav class="flex items-center gap-4">
+    <a href="/council" class="sc-navlink">Meet the council</a>
+    <form method="post" action="/logout">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}" />
-      <button type="submit" class="text-slate-500 hover:text-slate-800">Sign out</button>
+      <button type="submit" class="sc-btn sc-btn--quiet">Sign out</button>
     </form>
   </nav>
 </header>
 {% endblock %}
 
 {% block content %}
-<article class="rounded-2xl bg-white/80 backdrop-blur border border-white shadow-md p-8">
-  <h1 class="text-3xl font-semibold text-slate-800">{{ title }}</h1>
-  <p class="mt-2 text-sm text-slate-500">
-    Featuring:
-    {% for name in cast_names %}<span class="font-medium text-slate-700">{{ name }}</span>{% if !loop.last %}, {% endif %}{% endfor %}
-  </p>
-  <div class="mt-6 space-y-4 leading-relaxed text-slate-800">
-    {% for para in body_paragraphs %}
-      <p>{{ para }}</p>
-    {% endfor %}
+<article class="sc-card sc-card--pad-lg">
+  <p class="sc-eyebrow">{{ date_display }}</p>
+  <h1 class="sc-hero mt-1">{{ title }}</h1>
+  {% if !cast_names.is_empty() %}
+  <div class="sc-featuring mt-4">
+    <span class="sc-muted text-sm">Featuring</span>
+    {% for name in cast_names %}<span class="sc-badge">{{ name }}</span>{% endfor %}
   </div>
-  <p class="mt-8 text-xs text-slate-400">Told by {{ model }}.</p>
+  {% endif %}
+  <div class="sc-reading mt-6">
+    {% for para in body_paragraphs %}<p>{{ para }}</p>{% endfor %}
+  </div>
+  <p class="sc-muted mt-8 text-xs">Dreamed up by {{ model }}.</p>
 </article>
-<p class="mt-4 text-center">
-  <a href="/" class="text-sm text-violet-600 hover:underline">Back to today</a>
-</p>
+<p class="mt-5 text-center"><a href="/" class="sc-navlink">Back to today</a></p>
 {% endblock %}

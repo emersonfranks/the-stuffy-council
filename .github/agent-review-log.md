@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.7 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -711,6 +711,99 @@ agents-only audience rule isn't misread as a violation.
 Third review (Claude Opus 4.7) independently re-verified all fixes, links,
 anchors, the PowerShell one-liner, and whole-doc accuracy against config.rs
 / db.rs / main.rs → NO FINDINGS.
+
+## 2026-07-14 — visual-identity (#22)
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol → GPT-5.5 (copilot) (one BLOCK-triggered
+  follow-up; follow-up returned no BLOCK)
+- Delegated:      no
+- Files:
+  - static/app.css (new), static/fonts/* (woff2 + OFL), static/img/*.svg
+  - src/cast.rs (accent() + tests), src/error.rs (in-voice + tests)
+  - src/web/security.rs (CSP: drop dead Tailwind origin)
+  - src/routes/{mod,home,characters,auth}.rs, templates/*.html
+  - Dockerfile, .dockerignore, README.md, AGENTS.md, tests/router_smoke.rs
+
+Full visual identity for #22: design tokens (light + dark), self-hosted
+Fredoka/Nunito, component primitives, collectible-card council grid,
+character sheet, reading treatment, in-voice states. Ships the design
+standalone (portraits are silhouette placeholders pending #8). Notable
+deviation from #22's non-goal: the Tailwind Play CDN was REMOVED (it is a
+`<script>` the CSP `script-src` never allowed, so it never loaded); a
+self-hosted Tailwind-compatible utility subset replaces it. No CSP
+loosening; no build pipeline. #9 may vendor full Tailwind later.
+
+### Findings
+
+#### F1 — BLOCK | correctness | Dockerfile + .dockerignore | prod image omitted static/
+- what: `.dockerignore` allowlist lacked `static/**` and the runtime stage
+  never copied it — every asset would 404 in Azure.
+- fix:  `!static/**` in .dockerignore; `COPY --chown=app:app static /app/static`.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F2 — BLOCK | accessibility | static/app.css | a:hover overrode button text (contrast) + underline leak
+- what: global `a`/`a:hover` color (specificity 0,1,1) beat `.sc-btn--primary`
+  (0,1,0) on hover → lavender text on teal; links also underlined.
+- fix:  `a { color: inherit; text-decoration: none; }`; every `<a>` carries a
+  component class that owns its color; `.sc-navlink:hover` added.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F3 — BLOCK | accessibility | static/app.css | council card had no visible focus ring
+- what: the whole-card overlay link is zero-size; `.sc-toon:focus-within`
+  only changed transform/shadow.
+- fix:  added `.sc-toon:focus-within { outline: 3px solid var(--focus); }`.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F4 — BLOCK | tests | tests/router_smoke.rs | Tailwind/static fix had no regression test
+- fix:  added `login_links_local_css_and_drops_tailwind_cdn`,
+  `static_stylesheet_is_served` (GET /static/app.css → 200 + `--brand-council`),
+  and `login_denied_error_renders_in_voice_copy`.
+- status: Fixed (reviewer: GPT-5.6 Sol; test strengthened after GPT-5.5, see F11)
+
+#### F5 — MAJOR | tests | src/error.rs | elevated-bar copy change, no coverage
+- fix:  added tests asserting 404/500 status + public body and that Internal
+  never leaks the underlying anyhow message.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F6 — MINOR | correctness | src/cast.rs | accent() substring collision ("Dog Squad"→og)
+- fix:  exact normalized match; regression test `Dog Squad`→blossom; module
+  coverage-dimension N/A note added.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F7 — MINOR | css | static/app.css | missing baseline reset (<ul> bullets, box-sizing)
+- fix:  minimal reset (box-sizing, margin strips, `ul[class]` list-style none,
+  `img/svg` block, `button { font: inherit }`).
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F8 — MINOR | security | src/web/security.rs | dead Tailwind origin left in CSP
+- fix:  removed `https://cdn.tailwindcss.com` from style-src; doc + README
+  updated; `'unsafe-inline'` now documented as GIS-only.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F9 — NIT | css | static/app.css | unused primitives
+- fix:  removed `.sc-chip-user`, `.sc-btn--ghost`, `.sc-display`, and the
+  unused `--on-lavender/-danger/-peach` tokens.
+- status: Fixed (reviewer: GPT-5.6 Sol)
+
+#### F10 — MINOR | tests | src/routes/home.rs + characters.rs | authed view-model logic uncovered
+- what: home `spotlight` (on-council filter + sort) and character
+  `relationships` name-resolution + fallback have no functional test.
+- status: Deferred (blocked on #15 signed-JWT test harness — the same reason
+  tests/router_smoke.rs already defers all authenticated rendering; the logic
+  is a trivial filter/sort and a map-with-fallback). owner: #15
+
+#### F11 — MINOR | tests | tests/router_smoke.rs | denied-login assertion was tautological
+- what: asserted `body.contains("Council")`, which the base login page already
+  contains → would pass even if the denied branch stopped rendering.
+- fix:  assert the distinctive `"Google account"` substring (only in the
+  denial message).
+- status: Fixed (reviewer: GPT-5.5)
+
+#### F12 — MINOR | docs | AGENTS.md | canonical guidance still said Tailwind CDN
+- fix:  updated the tech-stack row + the non-goals bullet to the self-hosted
+  `static/app.css` state.
+- status: Fixed (reviewer: GPT-5.5)
 
 (Log grows from here.)
 

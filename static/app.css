@@ -1,0 +1,551 @@
+/*
+ * The Stuffy Council — design system.
+ *
+ * Audience: Lennon (10) — Pokemon + Bee-and-Puppycat sensibility, cute but
+ * not pink-heavy, artistic, sporty. See /memories/repo/design-brief or the
+ * Self-hosted — there is no Tailwind CDN (it was a <script> the CSP never
+ * allowed). This file owns tokens, fonts, a small baseline reset, the themed
+ * component primitives (prefixed `sc-`), and a Tailwind-compatible utility
+ * subset (at the bottom) for layout. #9 may vendor the full Tailwind build.
+ *
+ * All color pairs used as text/background here pass WCAG AA (verified with a
+ * contrast script when the palette was chosen — do not darken surfaces or
+ * lighten interactive fills without re-checking).
+ */
+
+/* ---- Fonts (self-hosted woff2, OFL — see static/fonts/*-OFL.txt) ---- */
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/fredoka-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/fredoka-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/nunito-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/nunito-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/nunito-700.woff2") format("woff2");
+}
+
+/* ---- Tokens ---- */
+:root {
+  --font-display: "Fredoka", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Surfaces + ink (light) */
+  --surface: #fbf8f2;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #f3eee4;
+  --ink: #3b3448;
+  --ink-muted: #6e6678;
+  --hairline: #ece5da;
+
+  /* Brand — teal-green primary (sporty/artistic), periwinkle secondary,
+     peach warmth, blossom = the single restrained pink. */
+  --brand-council: #1e7d68;
+  --brand-council-hover: #176856;
+  --brand-council-ink: #1f6b58;
+  --brand-council-tint: #dff3ec;
+
+  --brand-lavender: #5c60c6;
+  --brand-lavender-hover: #4a4fbf;
+  --brand-lavender-ink: #3f43a8;
+  --brand-lavender-tint: #e6e7fa;
+
+  --brand-peach: #f6a263;
+  --brand-peach-ink: #9a5a1e;
+  --brand-peach-tint: #fce9d6;
+
+  --brand-blossom: #e8709a;
+  --brand-blossom-ink: #b03a63;
+  --brand-blossom-tint: #fbe4ec;
+
+  --danger: #ce4257;
+  --danger-ink: #b03a4d;
+  --danger-tint: #fbe0e4;
+
+  --focus: #5c60c6;
+
+  /* On-fill text color (for the primary teal button). */
+  --on-council: #ffffff;
+
+  /* Faction accent (set per-card via [data-accent]) */
+  --accent: var(--brand-council);
+  --accent-ink: var(--brand-council-ink);
+  --accent-tint: var(--brand-council-tint);
+
+  /* Rhythm */
+  --radius-sm: 0.5rem;
+  --radius: 0.9rem;
+  --radius-lg: 1.4rem;
+  --shadow-sm: 0 1px 2px rgba(59, 52, 72, 0.06);
+  --shadow: 0 6px 20px -8px rgba(59, 52, 72, 0.22);
+  --shadow-lift: 0 14px 30px -12px rgba(59, 52, 72, 0.32);
+
+  /* Fabric grain behind the page */
+  --grain: url("/static/img/grain.svg");
+  /* Placeholder portrait silhouette (masked so it takes the accent color) */
+  --ph: url("/static/img/portrait-frame.svg");
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #211b2e;
+    --surface-elevated: #2c2440;
+    --surface-sunken: #1a1526;
+    --ink: #f1e9dc;
+    --ink-muted: #b6abc4;
+    --hairline: #3a3350;
+
+    --brand-council: #6fd8b9;
+    --brand-council-hover: #86e2c8;
+    --brand-council-ink: #a7e8d3;
+    --brand-council-tint: #254237;
+
+    --brand-lavender: #a9acf3;
+    --brand-lavender-hover: #bcbef6;
+    --brand-lavender-ink: #c7c9fb;
+    --brand-lavender-tint: #2a2c57;
+
+    --brand-peach: #f6a263;
+    --brand-peach-ink: #f7c39a;
+    --brand-peach-tint: #3d2e1e;
+
+    --brand-blossom: #f39ab9;
+    --brand-blossom-ink: #f7bcd0;
+    --brand-blossom-tint: #3a2330;
+
+    --danger: #ff8a9b;
+    --danger-ink: #ff8a9b;
+    --danger-tint: #3a1f27;
+
+    --focus: #a9acf3;
+
+    --on-council: #12261f;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 16px 34px -12px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ---- Reset (minimal) ----
+   The Tailwind CDN that used to ship preflight is gone, so re-establish
+   box-sizing and strip default margins + list styling the templates assume. */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+body,
+h1, h2, h3, p,
+figure, blockquote,
+dl, dd { margin: 0; }
+ul[class] { list-style: none; margin: 0; padding: 0; }
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; }
+
+/* ---- Base ---- */
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background-color: var(--surface);
+  background-image: var(--grain);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* Visible focus for every interactive element (a11y). */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+.sc-card:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Chrome: masthead + sign-out chip ---- */
+.sc-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.sc-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+.sc-wordmark img { width: 1.9rem; height: 1.9rem; }
+.sc-navlink {
+  font-weight: 600;
+  color: var(--brand-council-ink);
+}
+.sc-navlink:hover { color: var(--brand-council-hover); }
+
+/* ---- Card ---- */
+.sc-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1.75rem;
+}
+.sc-card--pad-lg { padding: 2.5rem; }
+
+/* Collectible-style character card: faction accent bar + hover lift. */
+.sc-toon {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.1rem 1.25rem;
+  overflow: hidden;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.sc-toon::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background: var(--accent);
+}
+.sc-toon:hover,
+.sc-toon:focus-within {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+.sc-toon:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.sc-toon__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+.sc-toon__meta { font-size: 0.85rem; color: var(--ink-muted); }
+/* Whole-card link overlay so the card is one big target. */
+.sc-toon__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- Portrait frame (placeholder until #8 lands real art) ---- */
+.sc-portrait {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: var(--accent-tint);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+.sc-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.sc-portrait--spot {
+  width: 72px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+.sc-portrait--mini { width: 56px; flex: 0 0 auto; }
+.sc-portrait--md { width: 96px; flex: 0 0 auto; }
+/* Masked silhouette placeholder — tints to the current accent until #8 art. */
+.sc-portrait__ph {
+  width: 66%;
+  height: 66%;
+  background: var(--accent-ink);
+  opacity: 0.5;
+  -webkit-mask: var(--ph) center / contain no-repeat;
+  mask: var(--ph) center / contain no-repeat;
+}
+
+/* ---- Buttons ---- */
+.sc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.7rem 1.3rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.sc-btn:active { transform: translateY(1px); }
+.sc-btn--primary { background: var(--brand-council); color: var(--on-council); }
+.sc-btn--primary:hover { background: var(--brand-council-hover); }
+.sc-btn--quiet {
+  background: transparent;
+  color: var(--ink-muted);
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.sc-btn--quiet:hover { color: var(--ink); }
+
+/* ---- Badges + faction "type" chips ---- */
+.sc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+.sc-badge--offcouncil {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+.sc-badge__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* Faction accent mapping (see Character::accent() in src/cast.rs) */
+[data-accent="mint"] {
+  --accent: var(--brand-council);
+  --accent-ink: var(--brand-council-ink);
+  --accent-tint: var(--brand-council-tint);
+}
+[data-accent="lavender"] {
+  --accent: var(--brand-lavender);
+  --accent-ink: var(--brand-lavender-ink);
+  --accent-tint: var(--brand-lavender-tint);
+}
+[data-accent="peach"] {
+  --accent: var(--brand-peach);
+  --accent-ink: var(--brand-peach-ink);
+  --accent-tint: var(--brand-peach-tint);
+}
+[data-accent="blossom"] {
+  --accent: var(--brand-blossom);
+  --accent-ink: var(--brand-blossom-ink);
+  --accent-tint: var(--brand-blossom-tint);
+}
+
+/* ---- Callout (catchphrase) ---- */
+.sc-callout {
+  border-left: 4px solid var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  padding: 0.85rem 1.1rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+/* ---- Relationship chips ---- */
+.sc-relchip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  font-size: 0.85rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.sc-relchip b { font-family: var(--font-display); font-weight: 600; }
+
+/* ---- Reading treatment (story body) ---- */
+.sc-reading {
+  font-size: 1.15rem;
+  line-height: 1.85;
+  color: var(--ink);
+}
+.sc-reading p { margin: 0 0 1.15rem; }
+.sc-reading p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  font-weight: 600;
+  float: left;
+  font-size: 3.4rem;
+  line-height: 0.8;
+  padding: 0.25rem 0.6rem 0 0;
+  color: var(--brand-lavender-ink);
+}
+
+/* ---- Character spotlight strip ---- */
+.sc-spotlight {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sc-spot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 84px;
+  text-align: center;
+}
+.sc-spot__name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+/* ---- Empty / status states ---- */
+.sc-empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+.sc-empty__art {
+  font-size: 2.75rem;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+}
+.sc-empty__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+.sc-empty__body { color: var(--ink-muted); margin-top: 0.4rem; }
+
+/* ---- Alerts ---- */
+.sc-alert {
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.sc-alert--denied { background: var(--danger-tint); color: var(--danger-ink); }
+
+/* ---- Eyebrow + hero copy ---- */
+.sc-eyebrow {
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-lavender-ink);
+}
+.sc-hero {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(2rem, 6vw, 2.9rem);
+  line-height: 1.05;
+  color: var(--ink);
+}
+.sc-lede { color: var(--ink-muted); font-size: 1.1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-toon,
+  .sc-btn { transition: none; }
+  body { background-attachment: scroll; }
+}
+
+/* ---- Small utilities ---- */
+.sc-muted { color: var(--ink-muted); }
+.sc-footer { color: var(--ink-muted); }
+.sc-dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.15rem;
+}
+.sc-featuring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ---- Layout utilities ----------------------------------------------------
+   Self-hosted subset of Tailwind's class names. The Tailwind Play CDN was
+   removed: it is a <script>, but the CSP `script-src` never allowed
+   cdn.tailwindcss.com, so it never actually loaded. These names/scale match
+   Tailwind so #9 can drop in the vendored framework later without touching
+   templates. */
+.flex { display: flex; }
+.grid { display: grid; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.flex-wrap { flex-wrap: wrap; }
+.text-center { text-align: center; }
+.whitespace-pre-line { white-space: pre-line; }
+
+.min-h-screen { min-height: 100vh; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.max-w-md { max-width: 28rem; }
+.max-w-3xl { max-width: 48rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+
+.text-sm { font-size: 0.875rem; line-height: 1.35; }
+.text-xs { font-size: 0.75rem; line-height: 1.3; }
+
+.gap-1\.5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-5 { gap: 1.25rem; }
+
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-5 { margin-top: 1.25rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mt-7 { margin-top: 1.75rem; }
+.mt-8 { margin-top: 2rem; }
+.mt-16 { margin-top: 4rem; }
+.mb-5 { margin-bottom: 1.25rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-8 { margin-bottom: 2rem; }
+
+@media (min-width: 640px) {
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

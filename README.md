@@ -95,8 +95,11 @@ cargo run
 
 Known caveats to close before "real" production:
 
-* Tailwind is loaded from the CDN. Vendor it locally (or swap for a
-  pre-built stylesheet) and drop `'unsafe-inline'` from `style-src`.
+* Styling is a self-hosted `static/app.css` (design tokens + a small
+  Tailwind-compatible utility subset). The Tailwind Play CDN was removed —
+  it was a `<script>` the CSP never allowed, so it never loaded. #9 may
+  vendor the full Tailwind build; `'unsafe-inline'` in `style-src` now
+  remains only for the GIS button's injected styles.
 * HTMX is loaded from unpkg.com. Same story — self-host and pin an SRI
   hash, then remove `https://unpkg.com` from `script-src`.
 

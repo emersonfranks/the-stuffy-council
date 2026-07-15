@@ -36,11 +36,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy binary + the cast files + migrations + the committed allowlist,
-# all read from disk at runtime (relative to WORKDIR).
+# Copy binary + the cast files + migrations + static assets + the committed
+# allowlist, all read from disk at runtime (relative to WORKDIR).
 COPY --from=builder /work/target/release/stuffy-council /usr/local/bin/stuffy-council
 COPY --chown=app:app cast /app/cast
 COPY --chown=app:app migrations /app/migrations
+COPY --chown=app:app static /app/static
 COPY --chown=app:app authorized-users.toml /app/authorized-users.toml
 
 # Data directory for SQLite (mount a persistent volume here in production).

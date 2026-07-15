@@ -10,4 +10,5 @@
 !templates/**
 !cast/**
 !migrations/**
+!static/**
 !authorized-users.toml
