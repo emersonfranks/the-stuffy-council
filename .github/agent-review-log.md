@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -866,5 +866,73 @@ No code touched.
 - fix:  Reworded to "Human characters (`kind = \"human\"`) are real
   people; they keep the silhouette placeholder and carry no `image`
   field."
+- status: Fixed
+
+## 2026-07-15 — Ruff Ruff candidate gallery
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - .gitattributes (new)
+  - static/stuffies/review/ruff-ruff--candidate-clean.png (new)
+  - static/stuffies/review/ruff-ruff--candidate-well-loved.png (new)
+  - docs/character-art.md
+  - src/routes/characters.rs
+  - templates/character.html
+  - static/app.css
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added two noncanonical Ruff Ruff design candidates and a
+conditional character-detail gallery. Candidate discovery matches
+`<stable-id>--candidate-<lowercase-kebab-label>.png` in
+`static/stuffies/review/`, filters invalid/non-file entries, sorts display
+labels, treats a missing directory as no candidates, and propagates other
+filesystem errors. The gallery renders semantic figures with accessible alt
+text only when candidates exist. Added the `*.png binary` guard, documented
+temporary public-static scope and promotion/deletion, and corrected Ruff
+Ruff's identity lock to the round-left/X-right stitched face. Six unit and
+template tests cover discovery/rendering; two tier-2 tests fetch both PNGs
+through the real static service. `cargo check` green; 43 unit + 12 integration
+tests green; touched Rust files rustfmt-clean; clippy has only six pre-existing
+warnings outside this slice. The earlier visual-identity F10 authenticated
+view-model gap remains Deferred on #15: this change tests gallery rendering
+directly and static delivery end-to-end, but cannot yet exercise an
+authenticated `/council/{id}` request through the full router.
+
+### Findings
+
+#### F1 — NIT | docs | docs/character-art.md | binary-guard wording described future work after the guard landed
+- what: The PNG rule still said to add `.gitattributes` and framed it as open
+  backlog work after this change created the file.
+- why:  Agent-facing docs must describe current state accurately.
+- fix:  Reworded it as a standing invariant linked to `../.gitattributes`.
+- status: Fixed
+
+#### F2 — NIT | docs | docs/character-art.md | candidate face contradicted the Ruff Ruff identity lock
+- what: Both candidates use the recognizable asymmetric stitched face while
+  the lock still specified two closed eyes.
+- why:  The art bible requires one byte-stable identity lock for variants.
+- fix:  Locked the notched round viewer-left eye and X-shaped viewer-right
+  eye; promotion now requires updating the lock if a selected design differs.
+- status: Fixed
+
+#### F3 — NIT | perf | docs/character-art.md | temporary review assets' public deployment was undisclosed
+- what: Review PNGs are copied into the container and served publicly under
+  `/static` until deletion.
+- why:  Accurate scope matters even though the toy illustrations contain no
+  private reference photos.
+- fix:  Documented direct public reachability, confirmed reference photos are
+  absent, and required prompt deletion after selection.
+- status: Fixed
+
+#### F4 — MINOR | tests | tests/router_smoke.rs | candidate URLs lacked real static-service coverage
+- what: Unit tests asserted generated URL strings but could not catch a
+  mount, packaging, MIME, or payload mismatch.
+- why:  Test-discipline Rule 1 requires cross-component behavior to use the
+  tier-2 real-server harness when independently testable.
+- fix:  Added one integration test per candidate asserting HTTP 200,
+  `image/png`, and the PNG byte signature through `stuffy_council::serve`.
 - status: Fixed
 

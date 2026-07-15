@@ -300,6 +300,35 @@ button:focus-visible,
   mask: var(--ph) center / contain no-repeat;
 }
 
+.sc-candidate-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+.sc-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+  list-style: none;
+}
+.sc-candidate { margin: 0; min-width: 0; }
+.sc-candidate img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.sc-candidate figcaption {
+  margin-top: 0.5rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink);
+}
+
 /* ---- Buttons ---- */
 .sc-btn {
   display: inline-flex;

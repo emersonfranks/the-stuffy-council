@@ -29,6 +29,22 @@
     {% when None %}
   {% endmatch %}
 
+  {% if !image_candidates.is_empty() %}
+  <section class="mt-6" aria-labelledby="art-candidates-heading">
+    <h2 id="art-candidates-heading" class="sc-candidate-title">Art candidates</h2>
+    <ul class="sc-candidate-grid mt-3">
+      {% for candidate in image_candidates %}
+      <li>
+        <figure class="sc-candidate">
+          <img src="{{ candidate.src }}" alt="{{ character.name }} art candidate: {{ candidate.label }}" width="1024" height="1024" loading="lazy" />
+          <figcaption>{{ candidate.label }}</figcaption>
+        </figure>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <dl class="mt-6 grid gap-5 text-sm">
     <div>
       <dt class="sc-dt">Role</dt>

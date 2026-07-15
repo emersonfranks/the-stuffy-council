@@ -116,7 +116,11 @@ async fn static_stylesheet_is_served() -> Result<()> {
         .get(format!("http://{addr}/static/app.css"))
         .send()
         .await?;
-    assert_eq!(resp.status(), StatusCode::OK, "GET /static/app.css should 200");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "GET /static/app.css should 200"
+    );
     let body = resp.text().await?;
     assert!(
         body.contains("--brand-council"),
@@ -124,6 +128,38 @@ async fn static_stylesheet_is_served() -> Result<()> {
         body.chars().take(120).collect::<String>()
     );
     Ok(())
+}
+
+async fn assert_static_png_is_served(path: &str) -> Result<()> {
+    const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+    let (addr, client, _app) = spawn().await?;
+    let resp = client.get(format!("http://{addr}{path}")).send().await?;
+
+    assert_eq!(resp.status(), StatusCode::OK, "GET {path} should 200");
+    assert_eq!(
+        resp.headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("image/png"),
+        "GET {path} should return image/png"
+    );
+    let body = resp.bytes().await?;
+    assert!(
+        body.starts_with(PNG_SIGNATURE),
+        "GET {path} should return PNG bytes"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn static_clean_art_candidate_is_served_as_png() -> Result<()> {
+    assert_static_png_is_served("/static/stuffies/review/ruff-ruff--candidate-clean.png").await
+}
+
+#[tokio::test]
+async fn static_well_loved_art_candidate_is_served_as_png() -> Result<()> {
+    assert_static_png_is_served("/static/stuffies/review/ruff-ruff--candidate-well-loved.png").await
 }
 
 /// The off-allowlist denial renders its in-voice message on the login page.

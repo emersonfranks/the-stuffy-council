@@ -27,9 +27,9 @@ Ruff Ruff → peach.
 
 ## Operational rules
 
-- **PNGs are binary.** Before committing art, add a `.gitattributes` entry
-  (`*.png binary`) so line-ending normalization cannot corrupt them
-  (tracked as backlog #10). Do NOT commit art before that guard exists.
+- **PNGs are binary.** The `*.png binary` rule in
+  [../.gitattributes](../.gitattributes) prevents line-ending normalization;
+  keep it when adding or moving art.
 - **No weapons in art, ever.** Woofy's lore mentions a "(mostly ceremonial)
   AK collection"; this is a kids' site and the depiction has already tripped
   a safety review. Convey his authority with a crown / sash / medal, never a
@@ -121,8 +121,9 @@ gold crown, presidential sash, or little medal — NEVER weapons.
 CHARACTER — Ruff Ruff, a well-loved shaggy plush dog with a soft curly-pile
 coat, gently worn and aged. Oatmeal / cream body with a faint gray-green
 tinge from years of love (well-loved-gray). Long floppy ears hanging beside
-the head, smooth satin cream inner-ear lining with a faint star print. Sweet
-CLOSED stitched eyes (content, a touch sleepy); worn suede oval brown nose;
+the head, smooth satin cream inner-ear lining with a faint star print.
+Asymmetric stitched face: one notched round black eye on viewer-left, one
+small X-shaped stitched eye on viewer-right; worn suede oval brown nose;
 rounded muzzle. Smooth satin paw-pad undersides (cream, faint stars). Chunky
 huggable lovey proportions. Signature prop: a little wooden spoon he wields
 like a doctor's instrument. Bearing: self-important doctor, devoted, a bit
@@ -138,6 +139,27 @@ a `--suffix` so ids stay predictable:
 - `woofy--full-body.png`, `woofy--wave.png`
 - `bar-bar--angry.png`, `bar-bar--singing.png`
 - `ruff-ruff--doctor.png`
+
+## Ruff Ruff review candidates
+
+These files are noncanonical design candidates. No cast TOML or template
+uses either as the canonical portrait. They remain 1024×1024 RGB PNGs on
+white so the two designs can be compared without background-removal
+differences influencing selection. The detail page discovers them by stable
+character id. `/static` is public, so the generated candidates remain directly
+reachable until they are deleted after selection; no reference photos are
+committed or served.
+
+| Candidate | Preview | Difference |
+| --------- | ------- | ---------- |
+| `static/stuffies/review/ruff-ruff--candidate-clean.png` | ![Clean Ruff Ruff candidate](../static/stuffies/review/ruff-ruff--candidate-clean.png) | Oatmeal/cream palette; exact asymmetric face; no added repair details |
+| `static/stuffies/review/ruff-ruff--candidate-well-loved.png` | ![Well-loved Ruff Ruff candidate](../static/stuffies/review/ruff-ruff--candidate-well-loved.png) | Same design plus faint satin stars, ear repair stitches, and a restrained belly seam |
+
+After family review, promote exactly one candidate by removing its white
+background, delivering a 512×512 transparent PNG as
+`static/stuffies/ruff-ruff.png`, and deleting both review candidates promptly.
+Update the identity lock above if the selected design changes any locked
+feature. Do not point `cast/ruff-ruff.toml` at a candidate filename.
 
 ## Worked example — Woofy, full-body hero wave
 
