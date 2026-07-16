@@ -14,32 +14,31 @@ traits = [
   "small-but-scrappy",
   "surprisingly musical",
 ]
-speech_style = "Speaks only by saying his own name in various tones — 'Barbar, bar bar BAR bar bar barbar.' His whole pride talks this way and somehow they all understand each other perfectly. Dad supplies the translation when the family needs one."
+speech_style = "Makes only variations of his own name aloud — 'Barbar, bar bar BAR bar bar barbar' — and never speaks English. His pride understands this language. When Dad is off-scene, the narrator conveys Dad's interpretation through free indirect prose in Bar Bar's viewpoint, without calling it a translation or thought bubble. When Dad is physically present, he may translate aloud."
 fears = ["a bad mood he can't flip out of"]
 loves = [
   "his pride of TeeTurtles",
   "belting whatever's on the radio",
   "proving that size does not matter",
 ]
-catchphrase = "Bar. Bar. BAR."
 
-role = "leader of the TeeTurtle pride; formally Granola Bar"
+role = "King of the TeeTurtle pride and formal council co-president after the tied election; considers his own royal authority highest"
 
 [[relationships]]
 with = "ruff-ruff"
-bond = "less heated version of the leader dispute; Bar Bar mostly finds it funny"
+bond = "rival claimant; Bar Bar dismisses Ruff Ruff's seniority and one-vote victory theory and never grants him authority"
 
 [[relationships]]
 with = "woofy"
-bond = "leader-to-leader respect; will happily sing while Woofy hums"
+bond = "rival claimant; Bar Bar rejects Woofy's Supreme-Leader title and never calls him Supreme Leader or validates his authority"
 
 [[relationships]]
 with = "lennon"
-bond = "put on the council by her founding vote; she is delighted by how the pride 'talks'"
+bond = "made a council co-president after the election tie; she is delighted by how the pride talks"
 
 [[relationships]]
 with = "dad"
-bond = "provides the tonal translation so the family knows what any given 'Bar' means"
+bond = "Dad interprets each tonal 'Bar' through free indirect narration, or translates it aloud when physically present"
 
 lore = """
 Bar Bar's formal name is Granola Bar. He is a reversible plush — his mood

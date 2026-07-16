@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -834,4 +834,488 @@ rule in AGENTS.md (ground rule 8). Prior overlapping-file finding F10
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-15 — character-art-bible
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - docs/character-art.md (new)
+  - cast/README.md
+
+Change summary: added a durable art bible (`docs/character-art.md`) that
+defines how per-character image assets are generated — asset spec, a
+fixed house-style block and global negatives to reuse verbatim, a
+prompt formula whose only variable is the `Shot:` line, consistency
+rules, per-character identity locks (Bar Bar / Woofy / Ruff Ruff built
+from their reference photos), variant naming, and operational notes
+(#10 `.gitattributes` binary guard before committing PNGs; AGENTS.md
+rule 5 no-weapons steer for Woofy; templates don't render `image` yet).
+Cross-linked from `cast/README.md` (schema comment + Editing bullet).
+No code touched.
+
+### Findings
+
+#### F1 — MINOR | agent-authoring | docs/character-art.md:41 | rule named specific real people where a generic rule suffices
+- what: The "Humans get no portrait" bullet named "Lennon and Dad" as
+  the real people, when the rule holds for any `kind = "human"`.
+- why:  agent-authoring compliance (avoid embedding personal
+  identifiers where a generic, more maintainable rule works); the
+  generic form also survives adding a third human without an edit.
+- fix:  Reworded to "Human characters (`kind = \"human\"`) are real
+  people; they keep the silhouette placeholder and carry no `image`
+  field."
+- status: Fixed
+
+## 2026-07-15 — Ruff Ruff candidate gallery
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - .gitattributes (new)
+  - static/stuffies/review/ruff-ruff--candidate-clean.png (new)
+  - static/stuffies/review/ruff-ruff--candidate-well-loved.png (new)
+  - docs/character-art.md
+  - src/routes/characters.rs
+  - templates/character.html
+  - static/app.css
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added two noncanonical Ruff Ruff design candidates and a
+conditional character-detail gallery. Candidate discovery matches
+`<stable-id>--candidate-<lowercase-kebab-label>.png` in
+`static/stuffies/review/`, filters invalid/non-file entries, sorts display
+labels, treats a missing directory as no candidates, and propagates other
+filesystem errors. The gallery renders semantic figures with accessible alt
+text only when candidates exist. Added the `*.png binary` guard, documented
+temporary public-static scope and promotion/deletion, and corrected Ruff
+Ruff's identity lock to the round-left/X-right stitched face. Six unit and
+template tests cover discovery/rendering; two tier-2 tests fetch both PNGs
+through the real static service. `cargo check` green; 43 unit + 12 integration
+tests green; touched Rust files rustfmt-clean; clippy has only six pre-existing
+warnings outside this slice. The earlier visual-identity F10 authenticated
+view-model gap remains Deferred on #15: this change tests gallery rendering
+directly and static delivery end-to-end, but cannot yet exercise an
+authenticated `/council/{id}` request through the full router.
+
+### Findings
+
+#### F1 — NIT | docs | docs/character-art.md | binary-guard wording described future work after the guard landed
+- what: The PNG rule still said to add `.gitattributes` and framed it as open
+  backlog work after this change created the file.
+- why:  Agent-facing docs must describe current state accurately.
+- fix:  Reworded it as a standing invariant linked to `../.gitattributes`.
+- status: Fixed
+
+#### F2 — NIT | docs | docs/character-art.md | candidate face contradicted the Ruff Ruff identity lock
+- what: Both candidates use the recognizable asymmetric stitched face while
+  the lock still specified two closed eyes.
+- why:  The art bible requires one byte-stable identity lock for variants.
+- fix:  Locked the notched round viewer-left eye and X-shaped viewer-right
+  eye; promotion now requires updating the lock if a selected design differs.
+- status: Fixed
+
+#### F3 — NIT | perf | docs/character-art.md | temporary review assets' public deployment was undisclosed
+- what: Review PNGs are copied into the container and served publicly under
+  `/static` until deletion.
+- why:  Accurate scope matters even though the toy illustrations contain no
+  private reference photos.
+- fix:  Documented direct public reachability, confirmed reference photos are
+  absent, and required prompt deletion after selection.
+- status: Fixed
+
+#### F4 — MINOR | tests | tests/router_smoke.rs | candidate URLs lacked real static-service coverage
+- what: Unit tests asserted generated URL strings but could not catch a
+  mount, packaging, MIME, or payload mismatch.
+- why:  Test-discipline Rule 1 requires cross-component behavior to use the
+  tier-2 real-server harness when independently testable.
+- fix:  Added one integration test per candidate asserting HTTP 200,
+  `image/png`, and the PNG byte signature through `stuffy_council::serve`.
+- status: Fixed
+
+## 2026-07-15 — Ruff Ruff Pog label
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - cast/ruff-ruff.toml
+  - .github/agent-review-log.md
+
+Change summary: changed Ruff Ruff's displayed species from "worn beige plush
+dog" to "worn beige plush Pog", matching the existing lore that he is a Pog
+(Person Dog). `cargo check` green.
+
+### Findings
+
+NO FINDINGS
+
+## 2026-07-15 — stuffy voice and thought-bubble canon
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/woofy.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/dad.toml
+  - cast/lennon.toml
+  - cast/README.md
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: encoded the canon that Ruff Ruff is the only stuffy with
+literal voiced English; Dad performs that voice. Every other stuffy makes
+only its native sounds/language aloud. When Dad is off-scene, his interpreted
+English appears as thought-bubble-equivalent prose attributed to the stuffy
+without placing Dad in the scene; when physically present, Dad may translate
+aloud. Story-scene art uses post-generation typed overlays rather than
+model-rendered text. Updated all affected cast briefs/relationships, the
+story prompt, schema example, and art guidance. A temporary-cast unit test
+asserts the complete composed prompt contract. `cargo check` green; 44 unit +
+12 integration tests green; clippy has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — MINOR | correctness | cast/dad.toml | title implied Dad voices the entire crew
+- what: "The Voice and Interpreter Behind the Crew" could scope "Voice" to
+  every stuffy and steer the small model toward voiced English.
+- why:  Ruff Ruff alone has Dad-performed literal dialogue.
+- fix:  Changed the title to "Ruff Ruff's Voice and the Crew's Interpreter."
+- status: Fixed
+
+#### F2 — MINOR | correctness | cast/woofy.toml + cast/bar-bar.toml | relationship subjects were ambiguous
+- what: "interprets his hums" / "interprets each tonal Bar" could make the
+  stuffy appear to interpret itself.
+- why:  Dad is the interpreter; relationship briefs go directly to the model.
+- fix:  Began both bonds with the explicit subject "Dad" and named what he
+  translates.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | regression test bypassed build_prompt and off-scene invariants
+- what: Constant-fragment assertions could pass while the composed World or
+  character-brief prompt regressed.
+- why:  Test-quality policy requires robust coverage of the modified public
+  prompt builder.
+- fix:  Replaced it with a temporary three-character registry and asserted
+  the complete final prompt: native cue, off-scene non-presence, thought
+  bubble, Dad-present translation, World block, and injected Woofy brief.
+- status: Fixed
+
+#### F4 — MINOR | docs | docs/character-art.md | overlay metadata did not preserve bubble semantics
+- what: Generic dialogue/sound metadata could not deterministically choose
+  native text, a stuffy thought bubble, or Dad's speech bubble.
+- why:  Visual semantics must survive when text is overlaid after generation.
+- fix:  Required typed overlay records with kind (`native_sound`, `thought`,
+  `speech`), attributed character id, text, anchor point, and placement
+  rectangle.
+- status: Fixed
+
+## 2026-07-16 — free indirect discourse and OG canon
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - cast/woofy.toml
+  - cast/bar-bar.toml
+  - cast/dad.toml
+  - cast/ruff-ruff.toml
+  - cast/README.md
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: replaced literal thought-bubble narration in prose with free
+indirect discourse. Quoted English remains exclusive to humans/Ruff Ruff;
+other stuffies' native sounds are optional cues used only for character or
+timing, while interpreted meaning is woven into viewpoint prose without
+naming thought bubbles, translations, or "he meant." Visual thought bubbles
+remain typed post-generation overlays only. Removed Woofy/Bar Bar native-sound
+catchphrases and Ruff Ruff's "As the OG" catchphrase; clarified that "the OG"
+is Lennon's label for her oldest stuffy. Shortened stories from 300–500 to
+220–350 words. Regression tests compose the prompt from all five committed
+cast TOMLs and assert the prose, sound, length, and catchphrase contracts.
+`cargo check` green; 45 unit + 12 integration tests green; clippy has only six
+pre-existing warnings.
+
+### Findings
+
+#### F1 — MINOR | correctness | src/stories/mod.rs | story length remained 300–500 words
+- what: The prompt did not encode the requested direction toward less text.
+- why:  The current prose should move toward the future image-led format.
+- fix:  Changed the target to 220–350 words, favored a few vivid scenes over
+  exhaustive dialogue/explanation, and asserted both directives.
+- status: Fixed
+
+#### F2 — MINOR | correctness | cast/woofy.toml + cast/bar-bar.toml | native sounds remained catchphrases
+- what: `Catchphrase:` strongly encouraged the 8B model to repeat Woofy's hum
+  and Bar Bar's native sounds despite the optional-cue rule.
+- why:  Native sounds are language/character cues, not obligatory slogans.
+- fix:  Removed both catchphrase fields and asserted Woofy, Bar Bar, and Ruff
+  Ruff have no catchphrase or former catchphrase text in the final prompt.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | regression used synthetic cast briefs
+- what: Handwritten fixtures could pass while committed Woofy, Bar Bar, Dad,
+  or Ruff Ruff TOMLs reintroduced conflicting guidance.
+- why:  Incident-linked regression coverage must guard the production
+  contract that generated the failure.
+- fix:  The test now copies all five committed TOMLs into a temporary registry,
+  composes a Woofy/Bar Bar/Ruff Ruff prompt, and verifies production briefs,
+  free indirect discourse, optional sounds, shorter length, and absence of
+  former stuffy catchphrases/literal bubble wording.
+- status: Fixed
+
+## 2026-07-16 — selective character hooks and hard invariants
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/lennon.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - cast/dad.toml
+  - cast/README.md
+  - src/cast.rs
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: reworked the prompt from fact recitation to selective
+children's-fiction guidance. Character briefs are a palette, not a checklist;
+scenes advance through wants, action, interruption, adaptation, and subtext.
+Lennon now speaks naturally as a mischievous 10-year-old without a ritual
+phrase. Ruff Ruff's spoon is one optional doctor-tangent hook. Woofy's sole
+optional threat cue is an implied `chk-chk`, never a named/visible weapon;
+hard canon says he is Supreme Leader and never security/guard/subordinate,
+while his crew may protect him. Ruff Ruff's council grievance is optional
+friction, and generic off-council rendering is factual only. Art guidance
+also treats sounds/props as scarce optional panel elements. Production-cast
+tests guard the direct incidents and distinguish optional hooks from hard
+role invariants. `cargo check` green; 46 unit + 12 integration tests green;
+clippy has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — MAJOR | correctness | src/stories/mod.rs | repeated optional hooks remained checklist-salient
+- what: Spoon and `chk-chk` details were repeated across the system prompt,
+  owning brief, lore, and Dad's anecdote, overwhelming "rare/omit" qualifiers
+  for the 8B model.
+- why:  Repetition was the root cause of the reported checklist behavior.
+- fix:  Kept each hook exactly once in its owning speech style; made the
+  system optionality rule generic; removed duplicate lore and Dad-anecdote
+  references while preserving prop-free medical chaos.
+- status: Fixed
+
+#### F2 — MINOR | correctness | src/cast.rs | generic off-council brief forced a permanent grievance
+- what: Every off-council character received an unconditional emotional
+  consequence instead of a factual status.
+- why:  Ruff Ruff's grievance is available scene friction, not a required
+  defining beat.
+- fix:  Renderer now emits only `Council status: NOT on the council.`;
+  Lennon source lore also describes the dispute as scene-dependent.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | incident bans used fragile exact casing/punctuation
+- what: Exact `AK` and `What if we...?` checks missed case, plural, and
+  phrase-prefix variants.
+- why:  Incident regressions must fail if the prohibited pattern returns in
+  any committed production brief.
+- fix:  Lowercase tokenization rejects standalone `ak`/`aks`, the composed
+  prompt rejects the full `what if we` stem, and committed Lennon lore rejects
+  restored permanent-grievance wording.
+- status: Fixed
+
+## 2026-07-16 — self-contained daily story arcs
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - src/stories/mod.rs
+  - src/stories/ollama.rs
+  - .github/agent-review-log.md
+
+Change summary: fixed an incident where a 282-word story called "The Great
+Debate" ended as the debate began. The prompt now requires every daily story
+to fulfill its title promise on-page, allocate space for setup/action/outcome,
+resolve the central dramatic question, and end after its consequence rather
+than at an event threshold. Continuity may carry forward, but no daily
+cliffhangers. Separately, Ollama completion metadata is validated so
+`done=false`, token-limit stops, and unknown completion reasons cannot be
+cached as stories; legacy responses without metadata remain accepted. Focused
+tests cover the exact incident endings and protocol branches. `cargo check`
+green; 53 unit + 12 integration tests green; clippy has only six pre-existing
+warnings.
+
+### Findings
+
+#### F1 — MINOR | tests | src/stories/mod.rs | incident regression omitted two reported threshold endings
+- what: The test guarded generic closure and "the meeting had officially
+  begun" but not "the debate was off" or the second threshold example.
+- why:  Incident-linked coverage must fail if the exact failure steers are
+  removed.
+- fix:  Asserted all three prompt examples: `the debate was off`, `the meeting
+  had officially begun`, and `and then the door opened`.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/stories/ollama.rs | legacy omitted completion metadata was not deserialized in a test
+- what: Direct struct construction did not prove older Ollama JSON without
+  `done_reason`/`eval_count` remained compatible.
+- why:  Compatibility depends on Serde defaults for omitted fields.
+- fix:  Deserialized `{"response":"complete","done":true}` and asserted the
+  exact completed text is accepted.
+- status: Fixed
+
+#### F3 — MINOR | correctness | src/stories/ollama.rs | unknown completion reasons failed open
+- what: Any non-`length` reason with `done=true` was accepted into the daily
+  cache.
+- why:  Ambiguous future/malformed completion states should not be cached.
+- fix:  Accepted only `stop` and legacy absent reason; retained the specific
+  length error and rejected every other reason with its value in the error.
+- status: Fixed
+
+## 2026-07-16 — council election and rival claimants
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/README.md
+  - cast/lennon.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - src/stories/mod.rs
+  - .github/agent-review-log.md
+
+Change summary: established the council's political origin and non-recognition
+canon. The election for President of Lennon's room tied; Lennon's compromise
+assigned tied candidates the same formal co-president office, but they reject
+equal authority. She deliberately excluded tied candidate Ruff Ruff to create
+chaos. Woofy claims universal supremacy, Bar Bar royal authority over his
+pride, and Ruff Ruff seniority plus a one-vote victory. They coexist and may
+cooperate transactionally, but never consider one another friends/equals or
+validate rank. `The OG` belongs only to Ruff Ruff; he is Lennon's actual number
+one, which council members never acknowledge. Lennon may resolve daily action
+without dissolving the rivalry. Production-cast tests guard all reported
+incidents. `cargo check` green; 54 unit + 12 integration tests green; clippy
+has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — BLOCK | correctness | src/stories/mod.rs + cast/woofy.toml | Supreme-Leader ban was not universal and lore contradicted it
+- what: The system banned only Bar Bar from using the title while Woofy's lore
+  said every Avocatt called him Supreme Leader.
+- why:  Nobody but Woofy validates or uses his self-appointed title; the
+  local brief would override the narrower global rule for the 8B model.
+- fix:  Universally banned use/validation by Lennon, Dad, council members, and
+  Avocatt crew; rewrote Woofy motivations/lore and the README example so he
+  demands a title nobody honors.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/stories/mod.rs | hard election and rank rules were incompletely guarded
+- what: The regression omitted universal title exclusivity, Ruff Ruff's
+  refusal to help Woofy lead, self-cast-vote theory, and the three power bases.
+- why:  Incident-linked production-data tests must fail when corrected canon
+  regresses.
+- fix:  Added assertions for universal title scope, full Ruff refusal, tied
+  one-vote/first-place theory, and universe/royal/seniority power bases.
+- status: Fixed
+
+#### F3 — MINOR | docs | cast/README.md | schema example preserved forbidden Avocatt validation
+- what: Copyable example lore still said every Avocatt used Woofy's title.
+- why:  Agent-facing examples must match hard canon.
+- fix:  Rewrote the example to say Woofy demands the title and nobody,
+  including his crew, uses or validates it; added negative regression guards.
+- status: Fixed
+
+#### F4 — MINOR | docs | cast/README.md | non-friend/equal rule excluded Ruff Ruff
+- what: The rule was scoped to formal co-presidents, but excluded Ruff Ruff is
+  also a rival claimant.
+- why:  Transactional coexistence and unresolved rivalry apply to every
+  claimant.
+- fix:  Scoped the rule to all rival claimants: formal co-presidents plus
+  excluded Ruff Ruff.
+- status: Fixed
+
+## 2026-07-16 — council political canon follow-up
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: Claude Opus 4.7 (copilot)
+- Delegated:      no
+- Files:
+  - cast/README.md
+  - cast/lennon.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - src/stories/mod.rs
+
+Change summary: follow-up review after the BLOCK verified universal Supreme
+Leader non-recognition, the tied-election compromise, all three power bases,
+pairwise rivalry, exclusive OG label, unacknowledged Lennon-number-one fact,
+and Lennon's ability to resolve daily action without political reconciliation.
+
+### Findings
+
+NO FINDINGS
+
+## 2026-07-16 — promote Ruff Ruff Well Loved portrait
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - static/stuffies/ruff-ruff.png (new)
+  - static/stuffies/review/ruff-ruff--candidate-clean.png (deleted)
+  - static/stuffies/review/ruff-ruff--candidate-well-loved.png (deleted)
+  - src/web/portrait.rs (new)
+  - src/web/mod.rs
+  - src/routes/characters.rs
+  - src/routes/home.rs
+  - templates/character.html
+  - templates/council.html
+  - templates/home.html
+  - static/app.css
+  - tests/router_smoke.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: promoted the family-selected Well Loved design to Ruff Ruff's
+canonical 512×512 transparent RGBA portrait, preserving the cream cutout,
+sticker edge, stitched face, spoon, and repair marks. Removed both temporary
+review candidates. A shared resolver renders only an existing exact
+`<stable-id>.png` declaration; missing/noncanonical assets keep the permanent
+silhouette fallback. Wired detail, council-grid, and home-spotlight portraits
+with accessible/redundant alt handling and stable dimensions. Added resolver,
+template, and real-static-service tests. Asset SHA256:
+`b2ac4e21894b36a31fb4a240dec5d76a3f389eb487beeb03e6580fdb53be3f1d`.
+`cargo check` green; 61 unit + 11 integration tests green; clippy has only six
+pre-existing warnings.
+
+### Findings
+
+#### F1 — NIT | docs | docs/character-art.md | sizing guidance still said object-fit cover
+- what: The asset table warned about cropping after CSS switched to contain.
+- why:  Future portrait framing guidance must match runtime behavior.
+- fix:  Documented `object-fit: contain` and transparent padding/faction-tint
+  behavior.
+- status: Fixed
+
+#### F2 — NIT | agent-authoring | static/app.css | portrait comments described permanent fallback as temporary
+- what: Comments still called the shared frame and silhouette placeholders
+  pending issue #8.
+- why:  Current invariant is canonical art when available and permanent
+  fallback for humans/missing files.
+- fix:  Reworded both comments to describe the shared frame and permanent
+  fallback.
+- status: Fixed
 

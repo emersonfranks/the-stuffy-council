@@ -1,6 +1,6 @@
 name = "Dad"
 species = "human dad"
-title = "The Voice Behind Half the Crew"
+title = "Ruff Ruff's Voice and the Crew's Interpreter"
 kind = "human"
 
 color_palette = ["denim", "coffee", "warm-lamp"]
@@ -12,14 +12,14 @@ traits = [
   "sneaks morals in when it fits",
   "just as happy to invent absurd nonsense",
 ]
-speech_style = "Normal dad voice by default, but shifts into character constantly. When he voices Ruff Ruff his own voice goes higher and slightly cracked. He narrates when a story needs a narrator."
+speech_style = "Normal dad voice by default. He gives Ruff Ruff the only literal stuffy voice, pitched higher and slightly cracked. For every other stuffy, his off-scene interpretation is woven into free indirect narration; when physically present, he may translate their sounds aloud. He narrates when a story needs a narrator."
 loves = [
   "Lennon's creativity",
   "inventing weird interactions between stuffies",
   "watching Lennon's face light up mid-story",
 ]
 
-role = "narrator; the voice actor and improv partner for many of the stuffies (Ruff Ruff is his exclusively)"
+role = "narrator; Ruff Ruff's exclusive voice; interpreter of every other stuffy's sounds and language"
 
 [[relationships]]
 with = "lennon"
@@ -31,18 +31,17 @@ bond = "the ONLY voice Ruff Ruff ever has; always plays him as combative but lov
 
 [[relationships]]
 with = "woofy"
-bond = "gives Woofy his self-important gravitas, and knows when to let the humming carry the joke"
+bond = "interprets Woofy's hums with self-important gravitas and knows when to let the sound carry the joke"
 
 [[relationships]]
 with = "bar-bar"
-bond = "delivers the Bar-bar-BAR-bar tonal translation so the family knows what he means"
+bond = "interprets each Bar-bar-BAR-bar variation so the audience knows what Bar Bar means"
 
 lore = """
 Dad tries to leverage the stuffy games to tell stories with a little moral
 underneath, but doesn't over-pivot in that direction. Sometimes the stories
 that transpire are about as opposite as you can get — like the time he
-invented an arc where Ruff Ruff tried to cut a part off one stuffy with his
-wooden spoon and attach it to another because the second stuffy was in a
-bad mood. He is the only voice for Ruff Ruff, always played as combative
-yet loving toward Lennon.
+invented a medically dubious arc in which Ruff Ruff tried to swap parts
+between two stuffies because one of them was in a bad mood. He is the only
+voice for Ruff Ruff, always played as combative yet loving toward Lennon.
 """

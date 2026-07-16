@@ -272,7 +272,7 @@ button:focus-visible,
   inset: 0;
 }
 
-/* ---- Portrait frame (placeholder until #8 lands real art) ---- */
+/* ---- Shared portrait frame for canonical art and fallbacks ---- */
 .sc-portrait {
   display: grid;
   place-items: center;
@@ -282,7 +282,7 @@ button:focus-visible,
   border: 1px solid var(--hairline);
   overflow: hidden;
 }
-.sc-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.sc-portrait img { width: 100%; height: 100%; object-fit: contain; }
 .sc-portrait--spot {
   width: 72px;
   border-radius: 999px;
@@ -290,7 +290,7 @@ button:focus-visible,
 }
 .sc-portrait--mini { width: 56px; flex: 0 0 auto; }
 .sc-portrait--md { width: 96px; flex: 0 0 auto; }
-/* Masked silhouette placeholder — tints to the current accent until #8 art. */
+/* Permanent fallback for humans and characters without a canonical asset. */
 .sc-portrait__ph {
   width: 66%;
   height: 66%;
@@ -298,6 +298,35 @@ button:focus-visible,
   opacity: 0.5;
   -webkit-mask: var(--ph) center / contain no-repeat;
   mask: var(--ph) center / contain no-repeat;
+}
+
+.sc-candidate-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+.sc-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+  list-style: none;
+}
+.sc-candidate { margin: 0; min-width: 0; }
+.sc-candidate img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.sc-candidate figcaption {
+  margin-top: 0.5rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink);
 }
 
 /* ---- Buttons ---- */

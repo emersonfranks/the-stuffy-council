@@ -14,41 +14,40 @@ traits = [
   "ready to escalate",
   "genuinely fond of his crew",
 ]
-speech_style = "Doesn't have a real mouth, so he 'talks' in a pseudo-humming — everyone somehow understands him. Dad delivers the humming with self-important gravitas."
+speech_style = "Makes pseudo-humming sounds aloud; never speaks English. When Dad is off-scene, the narrator conveys Dad's interpretation through free indirect prose in Woofy's viewpoint, without calling it a translation or thought bubble. When Dad is physically present, he may translate aloud. On rare occasions when an earned threat needs punctuation, a quiet 'chk-chk' sound is enough; never name, show, or explain a weapon."
 fears = [
-  "being addressed by anything less than his full title",
+  "everyone ignoring the full title he demands",
   "Ruff Ruff getting the last word",
 ]
 loves = [
   "the Avocatt crew (he'd never say it out loud)",
-  "his AK collection (which he grabs when provoked)",
-  "being addressed as Supreme Leader",
+  "demanding the Supreme-Leader title despite nobody honoring it",
+  "dramatic displays of authority",
 ]
-catchphrase = "*imperious hum*"
 
-role = "leads a crew of roughly six Avocatt stuffies; considers himself the Supreme Leader of the Universe"
+role = "formal council co-president after the tied election; self-declared Supreme Leader of the Universe and leader of roughly six Avocatts; never a guard, security detail, or subordinate — his crew may fill those roles for him"
 
 [[relationships]]
 with = "ruff-ruff"
-bond = "sworn rival over who's the real leader; escalates fast, forgives afterward"
+bond = "rival claimant; Woofy rejects Ruff Ruff's seniority and election theory, never acknowledges him as leader or Lennon's number one, and permits only temporary truces without concession"
 
 [[relationships]]
 with = "bar-bar"
-bond = "a working respect between leaders; occasional joint arms parades"
+bond = "rival claimant; Woofy regards Bar Bar's kingship as merely local, never acknowledges him as an equal or superior, and cooperates only when useful"
 
 [[relationships]]
 with = "lennon"
-bond = "his patron; Lennon founded the council and put him on it, which he interprets as coronation"
+bond = "made him a co-president after the election tie, which he deliberately misinterprets as coronation above every other council member"
 
 [[relationships]]
 with = "dad"
-bond = "the source of his imperious humming"
+bond = "Dad interprets his hums through self-important free indirect narration, or translates them aloud when physically present"
 
 lore = """
-Woofy leads about six Avocatt stuffies. Each of them refers to him as
-Supreme Leader of the Universe, which has done nothing to shrink his ego.
-When provoked he and his crew reach for an AK collection kept somewhere in
-Lennon's room — the collection is (mostly) ceremonial and (mostly) an
-excuse for a dramatic entrance. The rest of the Avocatts are unnamed for
-now; we'll fill them in as stories introduce them.
+Woofy leads about six Avocatt stuffies and demands to be called Supreme
+Leader of the Universe. Nobody — not the council, humans, or his own crew —
+uses or validates that self-appointed title. This has done nothing to shrink
+his ego. Woofy would never serve as someone else's guard or security detail.
+His Avocatt crew may provide security for him. The rest of the Avocatts are
+unnamed for now; we'll fill them in as stories introduce them.
 """
