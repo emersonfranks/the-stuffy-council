@@ -10,7 +10,7 @@
 {% block content %}
 <article class="sc-card sc-card--pad-lg" data-accent="{{ character.accent() }}">
   <div class="flex items-center gap-4">
-    <span class="sc-portrait sc-portrait--md"><span class="sc-portrait__ph"></span></span>
+    <span class="sc-portrait sc-portrait--md">{% match image_src %}{% when Some with (src) %}<img src="{{ src }}" alt="{{ character.name }}" width="512" height="512" />{% when None %}<span class="sc-portrait__ph"></span>{% endmatch %}</span>
     <div>
       <p class="sc-eyebrow">{{ character.species }}</p>
       <h1 class="sc-hero">{{ character.name }}</h1>

@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.7 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -1267,4 +1267,55 @@ and Lennon's ability to resolve daily action without political reconciliation.
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-16 — promote Ruff Ruff Well Loved portrait
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - static/stuffies/ruff-ruff.png (new)
+  - static/stuffies/review/ruff-ruff--candidate-clean.png (deleted)
+  - static/stuffies/review/ruff-ruff--candidate-well-loved.png (deleted)
+  - src/web/portrait.rs (new)
+  - src/web/mod.rs
+  - src/routes/characters.rs
+  - src/routes/home.rs
+  - templates/character.html
+  - templates/council.html
+  - templates/home.html
+  - static/app.css
+  - tests/router_smoke.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: promoted the family-selected Well Loved design to Ruff Ruff's
+canonical 512×512 transparent RGBA portrait, preserving the cream cutout,
+sticker edge, stitched face, spoon, and repair marks. Removed both temporary
+review candidates. A shared resolver renders only an existing exact
+`<stable-id>.png` declaration; missing/noncanonical assets keep the permanent
+silhouette fallback. Wired detail, council-grid, and home-spotlight portraits
+with accessible/redundant alt handling and stable dimensions. Added resolver,
+template, and real-static-service tests. Asset SHA256:
+`b2ac4e21894b36a31fb4a240dec5d76a3f389eb487beeb03e6580fdb53be3f1d`.
+`cargo check` green; 61 unit + 11 integration tests green; clippy has only six
+pre-existing warnings.
+
+### Findings
+
+#### F1 — NIT | docs | docs/character-art.md | sizing guidance still said object-fit cover
+- what: The asset table warned about cropping after CSS switched to contain.
+- why:  Future portrait framing guidance must match runtime behavior.
+- fix:  Documented `object-fit: contain` and transparent padding/faction-tint
+  behavior.
+- status: Fixed
+
+#### F2 — NIT | agent-authoring | static/app.css | portrait comments described permanent fallback as temporary
+- what: Comments still called the shared frame and silhouette placeholders
+  pending issue #8.
+- why:  Current invariant is canonical art when available and permanent
+  fallback for humans/missing files.
+- fix:  Reworded both comments to describe the shared frame and permanent
+  fallback.
+- status: Fixed
 

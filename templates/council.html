@@ -22,22 +22,22 @@
 </div>
 {% else %}
 <ul class="grid gap-4 sm:grid-cols-2">
-  {% for character in characters %}
-  <li class="sc-toon" data-accent="{{ character.accent() }}">
+  {% for item in characters %}
+  <li class="sc-toon" data-accent="{{ item.character.accent() }}">
     <div class="flex items-center gap-3">
-      <span class="sc-portrait sc-portrait--mini"><span class="sc-portrait__ph"></span></span>
+      <span class="sc-portrait sc-portrait--mini">{% match item.image_src %}{% when Some with (src) %}<img src="{{ src }}" alt="" width="512" height="512" />{% when None %}<span class="sc-portrait__ph"></span>{% endmatch %}</span>
       <div>
-        <p class="sc-toon__name">{{ character.name }}</p>
-        <p class="sc-toon__meta">{{ character.species }}</p>
+        <p class="sc-toon__name">{{ item.character.name }}</p>
+        <p class="sc-toon__meta">{{ item.character.species }}</p>
       </div>
     </div>
-    <p class="sc-toon__meta">{{ character.title }}</p>
+    <p class="sc-toon__meta">{{ item.character.title }}</p>
     <div class="flex flex-wrap gap-1.5">
-      {% if character.is_human() %}<span class="sc-badge">human</span>{% endif %}
-      {% match character.faction %}{% when Some with (f) %}<span class="sc-badge"><span class="sc-badge__dot"></span>{{ f }}</span>{% when None %}{% endmatch %}
-      {% if !character.on_council %}<span class="sc-badge sc-badge--offcouncil">off-council</span>{% endif %}
+      {% if item.character.is_human() %}<span class="sc-badge">human</span>{% endif %}
+      {% match item.character.faction %}{% when Some with (f) %}<span class="sc-badge"><span class="sc-badge__dot"></span>{{ f }}</span>{% when None %}{% endmatch %}
+      {% if !item.character.on_council %}<span class="sc-badge sc-badge--offcouncil">off-council</span>{% endif %}
     </div>
-    <a class="sc-toon__link" href="/council/{{ character.id }}" aria-label="Open {{ character.name }}&rsquo;s page"></a>
+    <a class="sc-toon__link" href="/council/{{ item.character.id }}" aria-label="Open {{ item.character.name }}&rsquo;s page"></a>
   </li>
   {% endfor %}
 </ul>

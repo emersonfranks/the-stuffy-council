@@ -13,13 +13,14 @@ use crate::auth::{SESSION_USER_KEY, SessionUser};
 use crate::cast::Character;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
+use crate::web::portrait::{self, CharacterPortrait};
 
 const IMAGE_CANDIDATE_DIR: &str = "static/stuffies/review";
 
 #[derive(Template)]
 #[template(path = "council.html")]
 struct CouncilTemplate<'a> {
-    characters: Vec<&'a Character>,
+    characters: Vec<CharacterPortrait<'a>>,
 }
 
 #[derive(Template)]
@@ -31,6 +32,7 @@ struct CharacterTemplate<'a> {
     /// can't reach the registry to turn a `with` id into a name.
     relationships: Vec<RelationshipView>,
     image_candidates: Vec<ImageCandidate>,
+    image_src: Option<String>,
 }
 
 struct RelationshipView {
@@ -53,8 +55,9 @@ pub async fn list_characters(
         return Ok(Redirect::to("/login").into_response());
     }
 
-    let mut characters: Vec<&Character> = state.cast.all().collect();
-    characters.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut characters: Vec<CharacterPortrait<'_>> =
+        state.cast.all().map(portrait::for_character).collect();
+    characters.sort_by(|a, b| a.character.name.cmp(&b.character.name));
 
     let tpl = CouncilTemplate { characters };
     Ok(render(&tpl)?.into_response())
@@ -90,6 +93,7 @@ pub async fn show_character(
         character,
         relationships,
         image_candidates,
+        image_src: portrait::for_character(character).image_src,
     };
     Ok(render(&tpl)?.into_response())
 }
@@ -314,6 +318,7 @@ mod tests {
                     label: "Well Loved".into(),
                 },
             ],
+            image_src: Some("/static/stuffies/ruff-ruff.png".into()),
         };
 
         let body = template.render().expect("render character template");
@@ -321,6 +326,9 @@ mod tests {
         assert!(body.contains("id=\"art-candidates-heading\""));
         assert!(body.contains("src=\"/static/stuffies/review/ruff-ruff--candidate-clean.png\""));
         assert!(body.contains("alt=\"Ruff Ruff art candidate: Well Loved\""));
+        assert!(body.contains(
+            "src=\"/static/stuffies/ruff-ruff.png\" alt=\"Ruff Ruff\""
+        ));
     }
 
     #[test]
@@ -330,11 +338,41 @@ mod tests {
             character: &character,
             relationships: Vec::new(),
             image_candidates: Vec::new(),
+            image_src: None,
         };
 
         let body = template.render().expect("render character template");
 
         assert!(!body.contains("art-candidates-heading"));
         assert!(!body.contains("sc-candidate-grid"));
+        assert!(body.contains("sc-portrait__ph"));
+    }
+
+    #[test]
+    fn council_template_renders_canonical_and_fallback_portraits() {
+        let canonical = build_character();
+        let mut fallback = build_character();
+        fallback.id = "woofy".into();
+        fallback.name = "Woofy".into();
+        fallback.image = Some("woofy.png".into());
+        let template = CouncilTemplate {
+            characters: vec![
+                CharacterPortrait {
+                    character: &canonical,
+                    image_src: Some("/static/stuffies/ruff-ruff.png".into()),
+                },
+                CharacterPortrait {
+                    character: &fallback,
+                    image_src: None,
+                },
+            ],
+        };
+
+        let body = template.render().expect("render council template");
+
+        assert!(body.contains("src=\"/static/stuffies/ruff-ruff.png\" alt=\"\""));
+        assert!(body.contains("Open Ruff Ruff&rsquo;s page"));
+        assert!(body.contains("Open Woofy&rsquo;s page"));
+        assert_eq!(body.matches("sc-portrait__ph").count(), 1);
     }
 }

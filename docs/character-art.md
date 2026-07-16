@@ -14,10 +14,10 @@ alone will not hold likeness.
 | Property    | Value                                                        | Why |
 | ----------- | ------------------------------------------------------------ | --- |
 | Files       | `woofy.png`, `bar-bar.png`, `ruff-ruff.png` in `static/stuffies/` | Must equal the `image =` value in each `cast/*.toml` (stable ids) |
-| Aspect      | Square 1:1                                                   | `.sc-portrait` is `aspect-ratio: 1` with `object-fit: cover` |
+| Aspect      | Square 1:1                                                   | `.sc-portrait` is `aspect-ratio: 1` with `object-fit: contain` |
 | Master size | 1024×1024, delivered at 512×512                             | Covers 2× of every use (mini 56 / spot 72 / md 96) with headroom |
 | Background  | Transparent                                                  | The portrait frame supplies its own faction tint; a cutout floats on it |
-| Framing     | Subject centered, ~10% padding all sides                    | `cover` crops to square; edge detail gets clipped |
+| Framing     | Subject centered, ~10% transparent padding all sides        | `contain` preserves the full cutout while the frame supplies faction tint |
 | Format      | Transparent PNG-24                                           | Matches the `image` fields; sizes are small so PNG is fine |
 | Palette     | Stay in each character's `cast/*.toml` `color_palette`; read well on its frame tint | Cohesion with the site |
 
@@ -34,10 +34,10 @@ Ruff Ruff → peach.
   typeset only a small `chk-chk` sound overlay; never draw, name, or explain a
   weapon. Convey his authority with posture, his crew, a crown / sash / medal,
   or another scene-appropriate signal. Baked into the global negatives below.
-- **Templates do not render `image` yet.** The portraits currently show the
-  silhouette placeholder (`.sc-portrait__ph`). Wiring `character.image` into
-  the frame with a silhouette fallback is a separate change; dropping files
-  into `static/stuffies/` does nothing until that lands.
+- **Templates render only complete canonical assets.** A character gets a real
+  portrait when `image` equals `<stable-id>.png` and that file exists under
+  `static/stuffies/`; missing or noncanonical declarations use the silhouette
+  fallback (`.sc-portrait__ph`).
 - **Humans get no portrait.** Human characters (`kind = "human"`) are real
   people; they keep the silhouette placeholder and carry no `image` field.
 
@@ -141,6 +141,9 @@ gold crown, presidential sash, or little medal — NEVER weapons.
 
 ### Ruff Ruff — `ruff-ruff.png` · frame tint peach
 
+The Well Loved design was selected during family review on 2026-07-16 and is
+the canonical 512×512 transparent portrait at `static/stuffies/ruff-ruff.png`.
+
 ```
 CHARACTER — Ruff Ruff, a well-loved shaggy plush dog with a soft curly-pile
 coat, gently worn and aged. Oatmeal / cream body with a faint gray-green
@@ -164,27 +167,6 @@ a `--suffix` so ids stay predictable:
 - `woofy--full-body.png`, `woofy--wave.png`
 - `bar-bar--angry.png`, `bar-bar--singing.png`
 - `ruff-ruff--doctor.png`
-
-## Ruff Ruff review candidates
-
-These files are noncanonical design candidates. No cast TOML or template
-uses either as the canonical portrait. They remain 1024×1024 RGB PNGs on
-white so the two designs can be compared without background-removal
-differences influencing selection. The detail page discovers them by stable
-character id. `/static` is public, so the generated candidates remain directly
-reachable until they are deleted after selection; no reference photos are
-committed or served.
-
-| Candidate | Preview | Difference |
-| --------- | ------- | ---------- |
-| `static/stuffies/review/ruff-ruff--candidate-clean.png` | ![Clean Ruff Ruff candidate](../static/stuffies/review/ruff-ruff--candidate-clean.png) | Oatmeal/cream palette; exact asymmetric face; no added repair details |
-| `static/stuffies/review/ruff-ruff--candidate-well-loved.png` | ![Well-loved Ruff Ruff candidate](../static/stuffies/review/ruff-ruff--candidate-well-loved.png) | Same design plus faint satin stars, ear repair stitches, and a restrained belly seam |
-
-After family review, promote exactly one candidate by removing its white
-background, delivering a 512×512 transparent PNG as
-`static/stuffies/ruff-ruff.png`, and deleting both review candidates promptly.
-Update the identity lock above if the selected design changes any locked
-feature. Do not point `cast/ruff-ruff.toml` at a candidate filename.
 
 ## Worked example — Woofy, full-body hero wave
 

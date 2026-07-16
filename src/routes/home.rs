@@ -7,11 +7,11 @@ use time::OffsetDateTime;
 use tower_sessions::Session;
 
 use crate::auth::{SESSION_USER_KEY, SessionUser};
-use crate::cast::Character;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::story_repo;
 use crate::web::csrf;
+use crate::web::portrait::{self, CharacterPortrait};
 
 #[derive(Template)]
 #[template(path = "home.html")]
@@ -23,7 +23,7 @@ struct HomeTemplate<'a> {
     today_iso: String,
     /// On-council cast for the spotlight strip. Borrows the registry, which
     /// lives as long as `state` for the duration of the handler.
-    spotlight: Vec<&'a Character>,
+    spotlight: Vec<CharacterPortrait<'a>>,
 }
 
 #[derive(Template)]
@@ -45,8 +45,13 @@ pub async fn index(State(state): State<AppState>, session: Session) -> AppResult
     let today = OffsetDateTime::now_utc().date();
     let cached = story_repo::get(&state.db, today).await?;
 
-    let mut spotlight: Vec<&Character> = state.cast.all().filter(|c| c.on_council).collect();
-    spotlight.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut spotlight: Vec<CharacterPortrait<'_>> = state
+        .cast
+        .all()
+        .filter(|character| character.on_council)
+        .map(portrait::for_character)
+        .collect();
+    spotlight.sort_by(|a, b| a.character.name.cmp(&b.character.name));
 
     let tpl = HomeTemplate {
         display_name: user.display_name,
@@ -121,4 +126,79 @@ fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
         .render()
         .map_err(|e| AppError::Internal(anyhow::anyhow!("template render: {e}")))?;
     Ok(Html(body))
+}
+
+#[cfg(test)]
+mod tests {
+    // Home portrait rendering is a stateless template projection. Functional
+    // and fallback branches are covered; negative, dependency-error, and
+    // state-transition dimensions belong to portrait::canonical_src tests.
+    use crate::cast::Character;
+
+    use super::*;
+
+    fn character() -> Character {
+        Character {
+            id: "woofy".into(),
+            name: "Woofy".into(),
+            species: "plush wolf".into(),
+            title: "President of the Universe".into(),
+            kind: "stuffy".into(),
+            image: Some("woofy.png".into()),
+            color_palette: Vec::new(),
+            traits: Vec::new(),
+            speech_style: "Hums".into(),
+            fears: Vec::new(),
+            loves: Vec::new(),
+            catchphrase: None,
+            role: "council co-president".into(),
+            faction: Some("Avocatts".into()),
+            faction_role: Some("leader".into()),
+            on_council: true,
+            relationships: Vec::new(),
+            lore: None,
+        }
+    }
+
+    #[test]
+    fn home_template_spotlight_renders_canonical_portrait() {
+        let character = character();
+        let template = HomeTemplate {
+            display_name: "Lennon".into(),
+            csrf_token: "token".into(),
+            has_today: false,
+            today_title: String::new(),
+            today_iso: "2026-07-16".into(),
+            spotlight: vec![CharacterPortrait {
+                character: &character,
+                image_src: Some("/static/stuffies/woofy.png".into()),
+            }],
+        };
+
+        let body = template.render().expect("render home template");
+
+        assert!(body.contains("src=\"/static/stuffies/woofy.png\" alt=\"\""));
+        assert!(!body.contains("sc-portrait__ph"));
+    }
+
+    #[test]
+    fn home_template_spotlight_without_image_renders_fallback() {
+        let character = character();
+        let template = HomeTemplate {
+            display_name: "Lennon".into(),
+            csrf_token: "token".into(),
+            has_today: false,
+            today_title: String::new(),
+            today_iso: "2026-07-16".into(),
+            spotlight: vec![CharacterPortrait {
+                character: &character,
+                image_src: None,
+            }],
+        };
+
+        let body = template.render().expect("render home template");
+
+        assert!(body.contains("sc-portrait__ph"));
+        assert!(!body.contains("/static/stuffies/woofy.png"));
+    }
 }

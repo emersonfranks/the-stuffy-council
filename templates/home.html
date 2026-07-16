@@ -19,10 +19,10 @@
 
 {% if !spotlight.is_empty() %}
 <section aria-label="The council" class="sc-spotlight mb-8">
-  {% for c in spotlight %}
-  <a class="sc-spot" href="/council/{{ c.id }}" data-accent="{{ c.accent() }}">
-    <span class="sc-portrait sc-portrait--spot"><span class="sc-portrait__ph"></span></span>
-    <span class="sc-spot__name">{{ c.name }}</span>
+  {% for item in spotlight %}
+  <a class="sc-spot" href="/council/{{ item.character.id }}" data-accent="{{ item.character.accent() }}">
+    <span class="sc-portrait sc-portrait--spot">{% match item.image_src %}{% when Some with (src) %}<img src="{{ src }}" alt="" width="512" height="512" />{% when None %}<span class="sc-portrait__ph"></span>{% endmatch %}</span>
+    <span class="sc-spot__name">{{ item.character.name }}</span>
   </a>
   {% endfor %}
 </section>
