@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -1131,5 +1131,54 @@ clippy has only six pre-existing warnings.
 - fix:  Lowercase tokenization rejects standalone `ak`/`aks`, the composed
   prompt rejects the full `what if we` stem, and committed Lennon lore rejects
   restored permanent-grievance wording.
+- status: Fixed
+
+## 2026-07-16 — self-contained daily story arcs
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - src/stories/mod.rs
+  - src/stories/ollama.rs
+  - .github/agent-review-log.md
+
+Change summary: fixed an incident where a 282-word story called "The Great
+Debate" ended as the debate began. The prompt now requires every daily story
+to fulfill its title promise on-page, allocate space for setup/action/outcome,
+resolve the central dramatic question, and end after its consequence rather
+than at an event threshold. Continuity may carry forward, but no daily
+cliffhangers. Separately, Ollama completion metadata is validated so
+`done=false`, token-limit stops, and unknown completion reasons cannot be
+cached as stories; legacy responses without metadata remain accepted. Focused
+tests cover the exact incident endings and protocol branches. `cargo check`
+green; 53 unit + 12 integration tests green; clippy has only six pre-existing
+warnings.
+
+### Findings
+
+#### F1 — MINOR | tests | src/stories/mod.rs | incident regression omitted two reported threshold endings
+- what: The test guarded generic closure and "the meeting had officially
+  begun" but not "the debate was off" or the second threshold example.
+- why:  Incident-linked coverage must fail if the exact failure steers are
+  removed.
+- fix:  Asserted all three prompt examples: `the debate was off`, `the meeting
+  had officially begun`, and `and then the door opened`.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/stories/ollama.rs | legacy omitted completion metadata was not deserialized in a test
+- what: Direct struct construction did not prove older Ollama JSON without
+  `done_reason`/`eval_count` remained compatible.
+- why:  Compatibility depends on Serde defaults for omitted fields.
+- fix:  Deserialized `{"response":"complete","done":true}` and asserted the
+  exact completed text is accepted.
+- status: Fixed
+
+#### F3 — MINOR | correctness | src/stories/ollama.rs | unknown completion reasons failed open
+- what: Any non-`length` reason with `done=true` was accepted into the daily
+  cache.
+- why:  Ambiguous future/malformed completion states should not be cached.
+- fix:  Accepted only `stop` and legacy absent reason; retained the specific
+  length error and rejected every other reason with its value in the error.
 - status: Fixed
 

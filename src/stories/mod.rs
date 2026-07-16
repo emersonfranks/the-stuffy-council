@@ -137,7 +137,8 @@ impl StoryService {
              to hear before bed. No genuinely \
              scary or adult content.\n\n\
              Length: 220–350 words. Favor a few vivid scenes over exhaustive \
-             dialogue or explanation. Give the story a short evocative title.\n\n",
+             dialogue or explanation. Give the story a short evocative title \
+             whose central promise is fulfilled before the final paragraph.\n\n",
         ));
         prompt.push_str(OUTPUT_FORMAT_INSTRUCTIONS);
         prompt
@@ -197,6 +198,20 @@ Rules:
     varied dialogue. Trust the reader to understand jokes and relationships \
     from behavior; avoid stiff role labels or phrases like `playing the role \
     of...` unless characters are literally casting a performance.
+* Every daily story is a SELF-CONTAINED EPISODE with a beginning, central \
+    action, and resolution. The title is a promise: the debate, contest, rescue, \
+    performance, mystery, or other event it names MUST happen on the page and \
+    reach a concrete outcome. Do not spend the whole story gathering characters \
+    or announcing what they are about to do.
+* Before writing, silently plan roughly the first quarter for setup, the \
+    middle half for the promised event and complications, and the final quarter \
+    for outcome and aftermath. Resolve today's central dramatic question even \
+    when relationships, jokes, or consequences carry into future stories.
+* Never end at the threshold of the promised event. Lines such as `the debate \
+    was off`, `the meeting had officially begun`, or `and then the door opened` \
+    are setup beats, not endings, when the central action remains unresolved. \
+    End after readers learn what happened and see its comic or emotional \
+    consequence. No cliffhangers and no `to be continued` endings.
 * Ruff Ruff is the ONLY stuffy with literal voiced English dialogue. Dad \
   performs his voice slightly higher and cracked.
 * Every other stuffy makes only the sounds or language in their character \
@@ -421,5 +436,33 @@ mod tests {
         assert!(!prompt.contains("a permanent grievance for this character"));
         assert!(prompt.contains("Council status: NOT on the council."));
         assert!(!include_str!("../../cast/lennon.toml").contains("permanent grievance"));
+    }
+
+    #[test]
+    fn build_prompt_requires_a_self_contained_title_promise_and_resolution() {
+        let temp = tempdir().expect("temp dir");
+        write_committed_cast(temp.path());
+        let cast = Arc::new(CastRegistry::load_from_dir(temp.path()).expect("load cast"));
+        let service = StoryService::new(Arc::new(UnusedGenerator), cast.clone());
+        let woofy = cast.get("woofy").expect("Woofy fixture");
+        let bar_bar = cast.get("bar-bar").expect("Bar Bar fixture");
+
+        let prompt = service.build_prompt(
+            Date::from_calendar_date(2026, Month::July, 16).expect("valid date"),
+            &[woofy, bar_bar],
+        );
+
+        assert!(prompt.contains("SELF-CONTAINED EPISODE"));
+        assert!(prompt.contains("The title is a promise"));
+        assert!(prompt.contains("MUST happen on the page and reach a concrete outcome"));
+        assert!(prompt.contains("first quarter for setup"));
+        assert!(prompt.contains("final quarter for outcome and aftermath"));
+        assert!(prompt.contains("Resolve today's central dramatic question"));
+        assert!(prompt.contains("Never end at the threshold of the promised event"));
+        assert!(prompt.contains("the debate was off"));
+        assert!(prompt.contains("the meeting had officially begun"));
+        assert!(prompt.contains("and then the door opened"));
+        assert!(prompt.contains("No cliffhangers"));
+        assert!(prompt.contains("central promise is fulfilled before the final paragraph"));
     }
 }
