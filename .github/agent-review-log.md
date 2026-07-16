@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: Claude Opus 4.7 (copilot)
 
 # Agent Review Log
 
@@ -1181,4 +1181,90 @@ warnings.
 - fix:  Accepted only `stop` and legacy absent reason; retained the specific
   length error and rejected every other reason with its value in the error.
 - status: Fixed
+
+## 2026-07-16 — council election and rival claimants
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/README.md
+  - cast/lennon.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - src/stories/mod.rs
+  - .github/agent-review-log.md
+
+Change summary: established the council's political origin and non-recognition
+canon. The election for President of Lennon's room tied; Lennon's compromise
+assigned tied candidates the same formal co-president office, but they reject
+equal authority. She deliberately excluded tied candidate Ruff Ruff to create
+chaos. Woofy claims universal supremacy, Bar Bar royal authority over his
+pride, and Ruff Ruff seniority plus a one-vote victory. They coexist and may
+cooperate transactionally, but never consider one another friends/equals or
+validate rank. `The OG` belongs only to Ruff Ruff; he is Lennon's actual number
+one, which council members never acknowledge. Lennon may resolve daily action
+without dissolving the rivalry. Production-cast tests guard all reported
+incidents. `cargo check` green; 54 unit + 12 integration tests green; clippy
+has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — BLOCK | correctness | src/stories/mod.rs + cast/woofy.toml | Supreme-Leader ban was not universal and lore contradicted it
+- what: The system banned only Bar Bar from using the title while Woofy's lore
+  said every Avocatt called him Supreme Leader.
+- why:  Nobody but Woofy validates or uses his self-appointed title; the
+  local brief would override the narrower global rule for the 8B model.
+- fix:  Universally banned use/validation by Lennon, Dad, council members, and
+  Avocatt crew; rewrote Woofy motivations/lore and the README example so he
+  demands a title nobody honors.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/stories/mod.rs | hard election and rank rules were incompletely guarded
+- what: The regression omitted universal title exclusivity, Ruff Ruff's
+  refusal to help Woofy lead, self-cast-vote theory, and the three power bases.
+- why:  Incident-linked production-data tests must fail when corrected canon
+  regresses.
+- fix:  Added assertions for universal title scope, full Ruff refusal, tied
+  one-vote/first-place theory, and universe/royal/seniority power bases.
+- status: Fixed
+
+#### F3 — MINOR | docs | cast/README.md | schema example preserved forbidden Avocatt validation
+- what: Copyable example lore still said every Avocatt used Woofy's title.
+- why:  Agent-facing examples must match hard canon.
+- fix:  Rewrote the example to say Woofy demands the title and nobody,
+  including his crew, uses or validates it; added negative regression guards.
+- status: Fixed
+
+#### F4 — MINOR | docs | cast/README.md | non-friend/equal rule excluded Ruff Ruff
+- what: The rule was scoped to formal co-presidents, but excluded Ruff Ruff is
+  also a rival claimant.
+- why:  Transactional coexistence and unresolved rivalry apply to every
+  claimant.
+- fix:  Scoped the rule to all rival claimants: formal co-presidents plus
+  excluded Ruff Ruff.
+- status: Fixed
+
+## 2026-07-16 — council political canon follow-up
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: Claude Opus 4.7 (copilot)
+- Delegated:      no
+- Files:
+  - cast/README.md
+  - cast/lennon.toml
+  - cast/bar-bar.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - src/stories/mod.rs
+
+Change summary: follow-up review after the BLOCK verified universal Supreme
+Leader non-recognition, the tied-election compromise, all three power bases,
+pairwise rivalry, exclusive OG label, unacknowledged Lennon-number-one fact,
+and Lennon's ability to resolve daily action without political reconciliation.
+
+### Findings
+
+NO FINDINGS
 

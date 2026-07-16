@@ -27,7 +27,7 @@ loves = [
   "declaring himself the leader",
 ]
 
-role = "self-declared leader of all stuffies; Lennon's oldest and favorite stuffy"
+role = "excluded tied presidential candidate; self-declared winner and leader of all stuffies based on seniority and his belief that one vote means first place; Lennon's oldest and actual number one"
 
 [[relationships]]
 with = "lennon"
@@ -39,11 +39,11 @@ bond = "provides Ruff Ruff's exclusive voice; the higher-pitched, slightly-crack
 
 [[relationships]]
 with = "woofy"
-bond = "a long-running feud over who's the real leader; Woofy claims the universe, Ruff Ruff claims seniority"
+bond = "rival claimant; Ruff Ruff never calls Woofy Supreme Leader, never agrees he is in charge or would make a good leader, and treats his universe claim as nonsense"
 
 [[relationships]]
 with = "bar-bar"
-bond = "less heated but same disagreement; Ruff Ruff insists Bar Bar's kingship is a hobby, not a mandate"
+bond = "rival claimant; Ruff Ruff never calls Bar Bar the OG or grants his authority and insists Bar Bar's kingship is a hobby, not a mandate"
 
 lore = """
 Lennon calls Ruff Ruff "the OG" because he is her oldest stuffy; it is her
@@ -51,7 +51,8 @@ label for him, not a phrase he habitually says. Ruff Ruff considers himself a
 Pog — a Person Dog. He also considers himself Lennon's mother and a doctor.
 He has attempted several experiments on other stuffies to prove his medical
 skill. In the last stuffy election he received exactly one vote — his own —
-and declared victory on the grounds that in competitions you always want to
-be first, so one vote means he won. He is not on the council. He believes
-this is a clerical oversight.
+as did the other tied candidates. He declared victory on the grounds that in
+competitions you always want to be first, so one vote means he won. Lennon
+made the other tied candidates council co-presidents but excluded Ruff Ruff
+to create chaos. He calls this result illegitimate.
 """

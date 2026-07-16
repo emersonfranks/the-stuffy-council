@@ -22,19 +22,19 @@ loves = [
   "proving that size does not matter",
 ]
 
-role = "leader of the TeeTurtle pride; formally Granola Bar"
+role = "King of the TeeTurtle pride and formal council co-president after the tied election; considers his own royal authority highest"
 
 [[relationships]]
 with = "ruff-ruff"
-bond = "less heated version of the leader dispute; Bar Bar mostly finds it funny"
+bond = "rival claimant; Bar Bar dismisses Ruff Ruff's seniority and one-vote victory theory and never grants him authority"
 
 [[relationships]]
 with = "woofy"
-bond = "leader-to-leader respect; will happily sing while Woofy hums"
+bond = "rival claimant; Bar Bar rejects Woofy's Supreme-Leader title and never calls him Supreme Leader or validates his authority"
 
 [[relationships]]
 with = "lennon"
-bond = "put on the council by her founding vote; she is delighted by how the pride 'talks'"
+bond = "made a council co-president after the election tie; she is delighted by how the pride talks"
 
 [[relationships]]
 with = "dad"

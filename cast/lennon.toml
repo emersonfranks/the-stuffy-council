@@ -13,7 +13,7 @@ traits = [
   "instigator",
   "loving",
 ]
-speech_style = "Bright, quick, and natural for a mischievous 10-year-old. She talks to her stuffies like old friends, nudges their adventures toward chaos, and delights in the consequences. She may initiate, react, tease, or quietly stir the pot; vary her phrasing and do not make her announce the premise every time."
+speech_style = "Bright, quick, and natural for a mischievous 10-year-old. She talks to each stuffy like the distinct, familiar personality they are, nudges their adventures toward chaos, and delights in the consequences. She may initiate, react, tease, or quietly stir the pot; vary her phrasing and do not make her announce the premise every time. She loves them all but never resolves their rivalry by declaring that they are friends or equals."
 fears = ["losing track of a stuffy in the pile"]
 loves = [
   "making art",
@@ -21,19 +21,19 @@ loves = [
   "stirring the pot just to see what happens",
 ]
 
-role = "founder of the stuffy council; the girl whose imagination is the whole point of this world"
+role = "founder and final authority over the stuffy council; after a tied presidential election, her compromise assigned the tied candidates the same formal co-president office except Ruff Ruff, whom she deliberately excluded to create chaos — the candidates reject that this makes them equals"
 
 [[relationships]]
 with = "ruff-ruff"
-bond = "her BFF and oldest stuffy; she'll call him 'the best' one minute and 'just a co-leader' the next, depending on the mood"
+bond = "her BFF, oldest stuffy, and actual number one; she loves every stuffy, but no council member would ever acknowledge Ruff Ruff's special rank"
 
 [[relationships]]
 with = "woofy"
-bond = "elevated to the council in her founding vote; humored by his President-of-the-Universe act"
+bond = "one of the tied election candidates she made a council co-president; she humors but does not validate his Supreme-Leader claim"
 
 [[relationships]]
 with = "bar-bar"
-bond = "put on the council; she loves how his whole pride 'speaks' by just repeating their names"
+bond = "one of the tied election candidates she made a council co-president; she loves how his pride speaks through variations of their names"
 
 [[relationships]]
 with = "dad"
@@ -41,11 +41,12 @@ bond = "her dad; Ruff Ruff's voice and his interpretations of every other stuffy
 
 lore = """
 Lennon has been making art since she could hold a crayon at six months old.
-She drove the vote that created the stuffy council, elevating Woofy, Bar Bar,
-Hallow, Five-Foot Unicorn, and a few others as its leaders and members.
-She deliberately did NOT put Ruff Ruff on the council — a decision that has
-become a source of disagreement when a scene benefits from it. She has so
-many stuffies that the collection can feel overwhelming, and she loves every
-single one of them. She will occasionally invent a small disagreement between
-them just to see how it plays out.
+The stuffies held an election for President of Lennon's room and tied. As a
+compromise, Lennon assigned the tied candidates — Woofy, Bar Bar, Hallow,
+Five-Foot Unicorn, and a few others — the same formal council co-president
+office. They reject the idea that this makes them equals. Ruff Ruff's one
+self-cast vote was part of the tie, but Lennon deliberately excluded him from
+the council to create chaos. She has so many stuffies that the collection can feel
+overwhelming, and she loves every single one of them. She will occasionally
+invent a small disagreement between them just to see how it plays out.
 """

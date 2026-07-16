@@ -130,10 +130,12 @@ impl StoryService {
              may bring along one or two unnamed crew members (e.g. Woofy with a couple \
              of Avocatts, Bar Bar with a TeeTurtle or two) if it serves the story.\n\n\
              Tone: playful and a little chaotic. Stuffies may bicker, boast, form \
-             short-lived alliances, or stage absurd mock-conflicts. Lennon may stir \
+             temporary transactional alliances, or stage absurd mock-conflicts. Lennon may stir \
              the pot on purpose — that's canon. Ruff Ruff's leadership grievance is \
              available when it gives the scene useful friction, but do not force it. \
-             Keep it warm underneath the mischief and end on a note that feels good \
+             Warmth comes from Lennon's love and the shared home, NOT from rivals \
+             becoming friends, equals, or validating one another's claims. End on a \
+             note that feels good \
              to hear before bed. No genuinely \
              scary or adult content.\n\n\
              Length: 220–350 words. Favor a few vivid scenes over exhaustive \
@@ -244,6 +246,32 @@ Rules:
 * Woofy sees himself as the Supreme Leader. He NEVER serves as security, a \
     guard, an underling, or someone else's supporting detail. His Avocatt crew \
     may provide those services for him.
+* Council politics are HARD CANON. An election for President of Lennon's room \
+    ended in a tie. As her compromise, Lennon assigned the tied candidates the \
+    same formal council office — co-president — except Ruff Ruff, whom she \
+    deliberately excluded to create chaos. The candidates reject that this \
+    compromise makes their authority equal. Ruff Ruff had one self-cast vote \
+    like the other tied candidates and insists one vote means first place, so \
+    he won anyway.
+* Formal co-presidency does NOT mean the stuffies consider one another equal. \
+    Each believes his own basis for power outranks the others: Woofy claims the \
+    universe, Bar Bar claims royal authority over his pride, and Ruff Ruff claims \
+    seniority plus his one-vote victory. They coexist and may cooperate \
+    transactionally, but they do NOT consider one another friends or equals.
+* No character other than Woofy — including Lennon, Dad, council members, and \
+    Woofy's Avocatt crew — ever addresses or refers to him as Supreme Leader or \
+    validates that self-appointed title. No stuffy ever validates another \
+    stuffy's rank, leadership, supremacy, or claim to Lennon. Ruff Ruff never \
+    says Woofy is in charge, would make a good leader, or deserves help leading. \
+    Woofy never accepts Bar Bar or Ruff Ruff as an equal or superior. A truce, \
+    shared success, or resolved daily plot must NOT settle this rivalry.
+* Lennon may stop a fight, redirect it, impose a ruling, or enjoy the chaos, \
+    but she never erases their political reality by declaring `We're all \
+    friends here` or claiming the rival stuffies consider one another friends.
+* \"The OG\" belongs only to Ruff Ruff as Lennon's label for her oldest \
+    stuffy. No character applies it to Bar Bar, Woofy, or anyone else. Lennon \
+    loves every stuffy; Ruff Ruff is her actual number one, but no council \
+    member will ever acknowledge that fact.
 * Playful chaos is welcome: bickering, boasting, silly power grabs, \
     absurd mock-conflicts. Ruff Ruff's claim to leadership is an available \
     running theme, not an obligation.
@@ -464,5 +492,56 @@ mod tests {
         assert!(prompt.contains("and then the door opened"));
         assert!(prompt.contains("No cliffhangers"));
         assert!(prompt.contains("central promise is fulfilled before the final paragraph"));
+    }
+
+    #[test]
+    fn build_prompt_preserves_council_rivalry_and_rejects_mutual_validation() {
+        let temp = tempdir().expect("temp dir");
+        write_committed_cast(temp.path());
+        let cast = Arc::new(CastRegistry::load_from_dir(temp.path()).expect("load cast"));
+        let service = StoryService::new(Arc::new(UnusedGenerator), cast.clone());
+        let woofy = cast.get("woofy").expect("Woofy fixture");
+        let bar_bar = cast.get("bar-bar").expect("Bar Bar fixture");
+        let ruff_ruff = cast.get("ruff-ruff").expect("Ruff Ruff fixture");
+
+        let prompt = service.build_prompt(
+            Date::from_calendar_date(2026, Month::July, 16).expect("valid date"),
+            &[woofy, bar_bar, ruff_ruff],
+        );
+
+        assert!(prompt.contains("election for President of Lennon's room ended in a tie"));
+        assert!(prompt.contains("same formal council office — co-president — except Ruff Ruff"));
+        assert!(prompt.contains("reject that this compromise makes their authority equal"));
+        assert!(prompt.contains("deliberately excluded to create chaos"));
+        assert!(prompt.contains("one self-cast vote"));
+        assert!(prompt.contains("one vote means first place"));
+        assert!(prompt.contains("do NOT consider one another friends or equals"));
+        assert!(prompt.contains("cooperate transactionally"));
+        assert!(prompt.contains("No character other than Woofy"));
+        assert!(prompt.contains("including Lennon, Dad, council members"));
+        assert!(prompt.contains("Woofy's Avocatt crew"));
+        assert!(prompt.contains("ever addresses or refers to him as Supreme Leader"));
+        assert!(prompt.contains("Ruff Ruff never says Woofy is in charge"));
+        assert!(prompt.contains("would make a good leader"));
+        assert!(prompt.contains("deserves help leading"));
+        assert!(prompt.contains("Woofy claims the universe"));
+        assert!(prompt.contains("Bar Bar claims royal authority over his pride"));
+        assert!(prompt.contains("Ruff Ruff claims seniority plus his one-vote victory"));
+        assert!(prompt.contains("A truce, shared success, or resolved daily plot must NOT settle"));
+        assert!(prompt.contains("she never erases their political reality"));
+        assert!(prompt.contains("We're all friends here"));
+        assert!(prompt.contains("The OG\" belongs only to Ruff Ruff"));
+        assert!(prompt.contains("No character applies it to Bar Bar"));
+        assert!(prompt.contains("Ruff Ruff is her actual number one"));
+        assert!(prompt.contains("no council member will ever acknowledge that fact"));
+        assert!(prompt.contains("never calls Bar Bar the OG"));
+        assert!(prompt.contains("never acknowledges him as leader or Lennon's number one"));
+        assert!(!prompt.contains("leader-to-leader respect"));
+        assert!(!prompt.contains("forgives afterward"));
+        assert!(!prompt.contains("like old friends"));
+        assert!(!prompt.contains("Each of them refers to him as"));
+        assert!(!prompt.contains("being addressed as Supreme Leader"));
+        assert!(!include_str!("../../cast/README.md").contains("forgives afterward"));
+        assert!(!include_str!("../../cast/README.md").contains("Each of them refers to him as"));
     }
 }
