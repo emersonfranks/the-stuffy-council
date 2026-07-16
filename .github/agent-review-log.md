@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -1070,5 +1070,66 @@ pre-existing warnings.
   composes a Woofy/Bar Bar/Ruff Ruff prompt, and verifies production briefs,
   free indirect discourse, optional sounds, shorter length, and absence of
   former stuffy catchphrases/literal bubble wording.
+- status: Fixed
+
+## 2026-07-16 — selective character hooks and hard invariants
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - cast/lennon.toml
+  - cast/ruff-ruff.toml
+  - cast/woofy.toml
+  - cast/dad.toml
+  - cast/README.md
+  - src/cast.rs
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: reworked the prompt from fact recitation to selective
+children's-fiction guidance. Character briefs are a palette, not a checklist;
+scenes advance through wants, action, interruption, adaptation, and subtext.
+Lennon now speaks naturally as a mischievous 10-year-old without a ritual
+phrase. Ruff Ruff's spoon is one optional doctor-tangent hook. Woofy's sole
+optional threat cue is an implied `chk-chk`, never a named/visible weapon;
+hard canon says he is Supreme Leader and never security/guard/subordinate,
+while his crew may protect him. Ruff Ruff's council grievance is optional
+friction, and generic off-council rendering is factual only. Art guidance
+also treats sounds/props as scarce optional panel elements. Production-cast
+tests guard the direct incidents and distinguish optional hooks from hard
+role invariants. `cargo check` green; 46 unit + 12 integration tests green;
+clippy has only six pre-existing warnings.
+
+### Findings
+
+#### F1 — MAJOR | correctness | src/stories/mod.rs | repeated optional hooks remained checklist-salient
+- what: Spoon and `chk-chk` details were repeated across the system prompt,
+  owning brief, lore, and Dad's anecdote, overwhelming "rare/omit" qualifiers
+  for the 8B model.
+- why:  Repetition was the root cause of the reported checklist behavior.
+- fix:  Kept each hook exactly once in its owning speech style; made the
+  system optionality rule generic; removed duplicate lore and Dad-anecdote
+  references while preserving prop-free medical chaos.
+- status: Fixed
+
+#### F2 — MINOR | correctness | src/cast.rs | generic off-council brief forced a permanent grievance
+- what: Every off-council character received an unconditional emotional
+  consequence instead of a factual status.
+- why:  Ruff Ruff's grievance is available scene friction, not a required
+  defining beat.
+- fix:  Renderer now emits only `Council status: NOT on the council.`;
+  Lennon source lore also describes the dispute as scene-dependent.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | incident bans used fragile exact casing/punctuation
+- what: Exact `AK` and `What if we...?` checks missed case, plural, and
+  phrase-prefix variants.
+- why:  Incident regressions must fail if the prohibited pattern returns in
+  any committed production brief.
+- fix:  Lowercase tokenization rejects standalone `ak`/`aks`, the composed
+  prompt rejects the full `what if we` stem, and committed Lennon lore rejects
+  restored permanent-grievance wording.
 - status: Fixed
 

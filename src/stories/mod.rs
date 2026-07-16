@@ -131,9 +131,10 @@ impl StoryService {
              of Avocatts, Bar Bar with a TeeTurtle or two) if it serves the story.\n\n\
              Tone: playful and a little chaotic. Stuffies may bicker, boast, form \
              short-lived alliances, or stage absurd mock-conflicts. Lennon may stir \
-             the pot on purpose — that's canon. Ruff Ruff will insist he's the real \
-             leader; the council will disagree. Keep it warm underneath the mischief \
-             and end on a note that feels good to hear before bed. No genuinely \
+             the pot on purpose — that's canon. Ruff Ruff's leadership grievance is \
+             available when it gives the scene useful friction, but do not force it. \
+             Keep it warm underneath the mischief and end on a note that feels good \
+             to hear before bed. No genuinely \
              scary or adult content.\n\n\
              Length: 220–350 words. Favor a few vivid scenes over exhaustive \
              dialogue or explanation. Give the story a short evocative title.\n\n",
@@ -185,6 +186,17 @@ young girl named Lennon. Each day one small adventure or quiet moment \
 unfolds among them. Your job is to write today's story.
 
 Rules:
+* Write polished children's fiction, not a demonstration of a character \
+    database. Treat each character brief as a PALETTE, NOT A CHECKLIST. Choose \
+    only the few details that serve this particular scene; leave most listed \
+    traits, loves, fears, titles, props, sounds, lore, and running jokes unused. \
+    Let canon shape choices, reactions, subtext, and comic timing instead of \
+    reciting or explaining it to the reader.
+* Build scenes through cause and effect: characters want something, act, \
+    misread one another, interrupt, adapt, and reveal themselves. Use natural, \
+    varied dialogue. Trust the reader to understand jokes and relationships \
+    from behavior; avoid stiff role labels or phrases like `playing the role \
+    of...` unless characters are literally casting a performance.
 * Ruff Ruff is the ONLY stuffy with literal voiced English dialogue. Dad \
   performs his voice slightly higher and cracked.
 * Every other stuffy makes only the sounds or language in their character \
@@ -207,13 +219,21 @@ Rules:
     It is NOT his catchphrase. Do not make him repeatedly say \"As the OG\" or \
     use it to prefix his dialogue; express his pride in seniority naturally \
     and with varied wording.
+* Lennon talks naturally like a bright, mischievous 10-year-old. She does \
+    not have to initiate every premise; let her react, tease, participate, or \
+    stir trouble through action. Do not turn any one phrase into her ritual \
+    opening.
+* Props, native sounds, and recurring bits are opportunities, never \
+    requirements. Use an optional hook only when the scene earns it; omit most \
+    hooks from every story. Character briefs own the specific examples.
+* Woofy sees himself as the Supreme Leader. He NEVER serves as security, a \
+    guard, an underling, or someone else's supporting detail. His Avocatt crew \
+    may provide those services for him.
 * Playful chaos is welcome: bickering, boasting, silly power grabs, \
-  absurd mock-conflicts. Ruff Ruff insisting he is the real leader is \
-  a running theme.
-* Any 'weapons' in this world (Woofy's AKs, Ruff Ruff's wooden-spoon \
-  'surgical instrument', etc.) are plush toys or pretend props used for \
-  dramatic entrances and slapstick. They are NEVER real firearms and \
-  never cause real harm.
+    absurd mock-conflicts. Ruff Ruff's claim to leadership is an available \
+    running theme, not an obligation.
+* Mock conflict stays theatrical and harmless. Never name or show a firearm; \
+    no prop causes real harm.
 * No genuinely scary or adult content. Rough-and-tumble is fine; real \
   harm is not.
 * Prefer specific sensory details (the couch, a blanket fort, the \
@@ -259,9 +279,9 @@ fn parse_titled_output(raw: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     // The prompt contract is stateless canonical text. Functional and
-    // regression dimensions verify the literal-voice/free-indirect-discourse
-    // rule in the fully composed prompt. Boundary, dependency-error, and
-    // state-transition dimensions are N/A.
+    // regression dimensions verify voice, free indirect discourse, optional
+    // hooks, and hard role invariants in the fully composed prompt. Boundary,
+    // dependency-error, and state-transition dimensions are N/A.
     use std::fs;
     use std::path::Path as FsPath;
 
@@ -356,5 +376,50 @@ mod tests {
         assert!(source.contains("Lennon calls Ruff Ruff \"the OG\""));
         assert!(source.contains("not a phrase he habitually says"));
         assert!(!ruff_ruff.to_prompt_brief().contains("Catchphrase:"));
+    }
+
+    #[test]
+    fn build_prompt_treats_character_hooks_as_optional_and_roles_as_invariants() {
+        let temp = tempdir().expect("temp dir");
+        write_committed_cast(temp.path());
+        let cast = Arc::new(CastRegistry::load_from_dir(temp.path()).expect("load cast"));
+        let service = StoryService::new(Arc::new(UnusedGenerator), cast.clone());
+        let woofy = cast.get("woofy").expect("Woofy fixture");
+        let ruff_ruff = cast.get("ruff-ruff").expect("Ruff Ruff fixture");
+        let lennon = cast.get("lennon").expect("Lennon fixture");
+
+        let prompt = service.build_prompt(
+            Date::from_calendar_date(2026, Month::July, 16).expect("valid date"),
+            &[woofy, ruff_ruff],
+        );
+
+        assert!(prompt.contains("PALETTE, NOT A CHECKLIST"));
+        assert!(prompt.contains("leave most listed"));
+        assert!(prompt.contains("available when it gives the scene useful friction"));
+        assert!(prompt.contains("an available running theme, not an obligation"));
+        assert!(prompt.contains(
+            "Props, native sounds, and recurring bits are opportunities, never requirements"
+        ));
+        assert!(prompt.contains("omit most hooks from every story"));
+        assert!(prompt.contains("Woofy sees himself as the Supreme Leader"));
+        assert!(prompt.contains("He NEVER serves as security"));
+        assert!(prompt.contains("His Avocatt crew may provide those services"));
+        assert!(prompt.contains("Lennon talks naturally like a bright, mischievous 10-year-old"));
+        assert!(prompt.contains("avoid stiff role labels"));
+        assert!(prompt.contains("chk-chk"));
+        let normalized_words = prompt
+            .to_ascii_lowercase()
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        assert!(!normalized_words.iter().any(|word| word == "ak" || word == "aks"));
+        assert!(!prompt.to_ascii_lowercase().contains("what if we"));
+        assert_eq!(lennon.catchphrase, None);
+        assert!(woofy.role.contains("never a guard, security detail, or subordinate"));
+        assert!(!ruff_ruff.loves.iter().any(|love| love.contains("wooden spoon")));
+        assert!(!prompt.contains("a permanent grievance for this character"));
+        assert!(prompt.contains("Council status: NOT on the council."));
+        assert!(!include_str!("../../cast/lennon.toml").contains("permanent grievance"));
     }
 }

@@ -17,14 +17,13 @@ traits = [
   "argumentative",
   "utterly devoted to Lennon",
 ]
-speech_style = "The only stuffy with literal voiced English dialogue. Dad performs his voice slightly higher and cracked. Ruff Ruff says confidently wrong things about medicine, biology, and elections."
+speech_style = "The only stuffy with literal voiced English dialogue. Dad performs his voice slightly higher and cracked. Ruff Ruff says confidently wrong things about medicine, biology, and elections. His wooden spoon is an occasional medical prop: funniest when he hijacks an unrelated moment with a flimsy excuse to play doctor; omit it when no doctor tangent earns it."
 fears = [
   "being replaced by any newer stuffy",
   "the council formalizing anything without him",
 ]
 loves = [
   "Lennon (his entire world)",
-  "his wooden spoon (which he considers medical equipment)",
   "declaring himself the leader",
 ]
 
@@ -49,8 +48,7 @@ bond = "less heated but same disagreement; Ruff Ruff insists Bar Bar's kingship 
 lore = """
 Lennon calls Ruff Ruff "the OG" because he is her oldest stuffy; it is her
 label for him, not a phrase he habitually says. Ruff Ruff considers himself a
-Pog — a Person Dog. He also considers himself Lennon's mother, and a doctor
-whose primary instrument is a wooden spoon.
+Pog — a Person Dog. He also considers himself Lennon's mother and a doctor.
 He has attempted several experiments on other stuffies to prove his medical
 skill. In the last stuffy election he received exactly one vote — his own —
 and declared victory on the grounds that in competitions you always want to

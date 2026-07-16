@@ -1,5 +1,5 @@
 name = "Lennon"
-species = "human girl"
+species = "10-year-old human girl"
 title = "The Imagination Behind It All"
 kind = "human"
 
@@ -13,14 +13,13 @@ traits = [
   "instigator",
   "loving",
 ]
-speech_style = "Bright and quick. Cheerfully proposes wild premises and then delights in whatever chaos follows. Talks to her stuffies out loud like they're old friends."
+speech_style = "Bright, quick, and natural for a mischievous 10-year-old. She talks to her stuffies like old friends, nudges their adventures toward chaos, and delights in the consequences. She may initiate, react, tease, or quietly stir the pot; vary her phrasing and do not make her announce the premise every time."
 fears = ["losing track of a stuffy in the pile"]
 loves = [
   "making art",
   "her stuffies (all of them, especially Ruff Ruff)",
   "stirring the pot just to see what happens",
 ]
-catchphrase = "What if we...?"
 
 role = "founder of the stuffy council; the girl whose imagination is the whole point of this world"
 
@@ -45,8 +44,8 @@ Lennon has been making art since she could hold a crayon at six months old.
 She drove the vote that created the stuffy council, elevating Woofy, Bar Bar,
 Hallow, Five-Foot Unicorn, and a few others as its leaders and members.
 She deliberately did NOT put Ruff Ruff on the council — a decision that has
-caused a permanent grievance between him and the group. She has so many
-stuffies that the collection can feel overwhelming, and she loves every
-single one of them. She will occasionally invent a small disagreement
-between them just to see how it plays out.
+become a source of disagreement when a scene benefits from it. She has so
+many stuffies that the collection can feel overwhelming, and she loves every
+single one of them. She will occasionally invent a small disagreement between
+them just to see how it plays out.
 """

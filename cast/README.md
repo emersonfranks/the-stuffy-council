@@ -35,8 +35,7 @@ color_palette = ["dove-gray", "cloud-white", "pink-ear"]
 # Personality (all optional except speech_style)
 traits      = ["grandiose", "twitchy about respect"]
 fears       = ["being addressed by anything less than his full title"]
-loves       = ["his AK collection", "being addressed as Supreme Leader"]
-catchphrase = "*imperious hum*"
+loves       = ["dramatic displays of authority", "being addressed as Supreme Leader"]
 
 # Relationships to other characters by id (optional)
 [[relationships]]

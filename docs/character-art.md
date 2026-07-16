@@ -30,10 +30,10 @@ Ruff Ruff → peach.
 - **PNGs are binary.** The `*.png binary` rule in
   [../.gitattributes](../.gitattributes) prevents line-ending normalization;
   keep it when adding or moving art.
-- **No weapons in art, ever.** Woofy's lore mentions a "(mostly ceremonial)
-  AK collection"; this is a kids' site and the depiction has already tripped
-  a safety review. Convey his authority with a crown / sash / medal, never a
-  firearm. Baked into the global negatives below.
+- **No weapons in art, ever.** If a scene earns Woofy's rare threat cue,
+  typeset only a small `chk-chk` sound overlay; never draw, name, or explain a
+  weapon. Convey his authority with posture, his crew, a crown / sash / medal,
+  or another scene-appropriate signal. Baked into the global negatives below.
 - **Templates do not render `image` yet.** The portraits currently show the
   silhouette placeholder (`.sc-portrait__ph`). Wiring `character.image` into
   the frame with a silhouette fallback is a separate change; dropping files
@@ -51,10 +51,11 @@ or "read" something.
 
 - Ruff Ruff is the only stuffy with literal voiced English dialogue. His words
   use a speech bubble.
-- Every other stuffy makes its native sounds aloud. Put a small sound cue near
-  the character (for example, Woofy's hum or Bar Bar's tonal name), then put
-  Dad's interpreted English in a thought bubble pointing directly to the
-  stuffy. The thought bubble does not place Dad in the scene.
+- Every other stuffy makes its native sounds aloud. When a sound cue improves
+  character or timing, put it near the stuffy (for example, Woofy's hum or Bar
+  Bar's tonal name). Use Dad's interpreted-English thought bubble only when it
+  earns scarce panel space; do not annotate every action or exchange. The
+  thought bubble points to the stuffy and does not place Dad in the scene.
 - When Dad is physically present, he may translate the sound in his own speech
   bubble instead of using the stuffy's thought bubble.
 - Scene-generation output must reserve bubble space and return typed overlay
@@ -148,9 +149,10 @@ the head, smooth satin cream inner-ear lining with a faint star print.
 Asymmetric stitched face: one notched round black eye on viewer-left, one
 small X-shaped stitched eye on viewer-right; worn suede oval brown nose;
 rounded muzzle. Smooth satin paw-pad undersides (cream, faint stars). Chunky
-huggable lovey proportions. Signature prop: a little wooden spoon he wields
-like a doctor's instrument. Bearing: self-important doctor, devoted, a bit
-random — gentle, never sad.
+huggable lovey proportions. Occasional prop: a little wooden spoon he wields
+like a doctor's instrument only in a doctor-play or absurd medical-tangent
+scene. Bearing: self-important doctor, devoted, a bit random — gentle, never
+sad.
 ```
 
 ## Variant naming

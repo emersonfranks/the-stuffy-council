@@ -115,7 +115,7 @@ impl Character {
             out.push_str(&format!("Faction: {faction} ({role}).\n"));
         }
         if !self.on_council {
-            out.push_str("Council status: NOT on the council (Lennon left them off — a permanent grievance for this character).\n");
+            out.push_str("Council status: NOT on the council.\n");
         }
         if !self.traits.is_empty() {
             out.push_str(&format!("Traits: {}.\n", self.traits.join(", ")));
