@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -1014,5 +1014,61 @@ asserts the complete composed prompt contract. `cargo check` green; 44 unit +
 - fix:  Required typed overlay records with kind (`native_sound`, `thought`,
   `speech`), attributed character id, text, anchor point, and placement
   rectangle.
+- status: Fixed
+
+## 2026-07-16 — free indirect discourse and OG canon
+
+- Author model:   Claude Opus 4.8 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - cast/woofy.toml
+  - cast/bar-bar.toml
+  - cast/dad.toml
+  - cast/ruff-ruff.toml
+  - cast/README.md
+  - src/stories/mod.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: replaced literal thought-bubble narration in prose with free
+indirect discourse. Quoted English remains exclusive to humans/Ruff Ruff;
+other stuffies' native sounds are optional cues used only for character or
+timing, while interpreted meaning is woven into viewpoint prose without
+naming thought bubbles, translations, or "he meant." Visual thought bubbles
+remain typed post-generation overlays only. Removed Woofy/Bar Bar native-sound
+catchphrases and Ruff Ruff's "As the OG" catchphrase; clarified that "the OG"
+is Lennon's label for her oldest stuffy. Shortened stories from 300–500 to
+220–350 words. Regression tests compose the prompt from all five committed
+cast TOMLs and assert the prose, sound, length, and catchphrase contracts.
+`cargo check` green; 45 unit + 12 integration tests green; clippy has only six
+pre-existing warnings.
+
+### Findings
+
+#### F1 — MINOR | correctness | src/stories/mod.rs | story length remained 300–500 words
+- what: The prompt did not encode the requested direction toward less text.
+- why:  The current prose should move toward the future image-led format.
+- fix:  Changed the target to 220–350 words, favored a few vivid scenes over
+  exhaustive dialogue/explanation, and asserted both directives.
+- status: Fixed
+
+#### F2 — MINOR | correctness | cast/woofy.toml + cast/bar-bar.toml | native sounds remained catchphrases
+- what: `Catchphrase:` strongly encouraged the 8B model to repeat Woofy's hum
+  and Bar Bar's native sounds despite the optional-cue rule.
+- why:  Native sounds are language/character cues, not obligatory slogans.
+- fix:  Removed both catchphrase fields and asserted Woofy, Bar Bar, and Ruff
+  Ruff have no catchphrase or former catchphrase text in the final prompt.
+- status: Fixed
+
+#### F3 — MINOR | tests | src/stories/mod.rs | regression used synthetic cast briefs
+- what: Handwritten fixtures could pass while committed Woofy, Bar Bar, Dad,
+  or Ruff Ruff TOMLs reintroduced conflicting guidance.
+- why:  Incident-linked regression coverage must guard the production
+  contract that generated the failure.
+- fix:  The test now copies all five committed TOMLs into a temporary registry,
+  composes a Woofy/Bar Bar/Ruff Ruff prompt, and verifies production briefs,
+  free indirect discourse, optional sounds, shorter length, and absence of
+  former stuffy catchphrases/literal bubble wording.
 - status: Fixed
 

@@ -45,7 +45,9 @@ Ruff Ruff → peach.
 
 Portrait assets contain no text. Story-scene illustrations apply this canon
 as a deterministic layout overlay after image generation; do not ask the
-image model to draw letters.
+image model to draw letters. This is a visual convention only: prose stories
+use free indirect discourse and never narrate that a thought bubble appeared
+or "read" something.
 
 - Ruff Ruff is the only stuffy with literal voiced English dialogue. His words
   use a speech bubble.

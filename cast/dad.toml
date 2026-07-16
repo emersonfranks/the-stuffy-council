@@ -12,7 +12,7 @@ traits = [
   "sneaks morals in when it fits",
   "just as happy to invent absurd nonsense",
 ]
-speech_style = "Normal dad voice by default. He gives Ruff Ruff the only literal stuffy voice, pitched higher and slightly cracked. For every other stuffy he interprets their sounds for the audience as thought-bubble dialogue when off-scene, or translates aloud when physically present. He narrates when a story needs a narrator."
+speech_style = "Normal dad voice by default. He gives Ruff Ruff the only literal stuffy voice, pitched higher and slightly cracked. For every other stuffy, his off-scene interpretation is woven into free indirect narration; when physically present, he may translate their sounds aloud. He narrates when a story needs a narrator."
 loves = [
   "Lennon's creativity",
   "inventing weird interactions between stuffies",

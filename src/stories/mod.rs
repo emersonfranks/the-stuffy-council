@@ -135,7 +135,8 @@ impl StoryService {
              leader; the council will disagree. Keep it warm underneath the mischief \
              and end on a note that feels good to hear before bed. No genuinely \
              scary or adult content.\n\n\
-             Length: 300–500 words. Give the story a short evocative title.\n\n",
+             Length: 220–350 words. Favor a few vivid scenes over exhaustive \
+             dialogue or explanation. Give the story a short evocative title.\n\n",
         ));
         prompt.push_str(OUTPUT_FORMAT_INSTRUCTIONS);
         prompt
@@ -189,14 +190,23 @@ Rules:
 * Every other stuffy makes only the sounds or language in their character \
   brief. Woofy hums; Bar Bar says variations of his own name. They NEVER \
   speak English aloud.
-* When Dad is not physically in the scene, show a non-Ruff-Ruff stuffy's \
-  intended words as thought-bubble-equivalent prose attributed directly to \
-  that stuffy. Include a small audible sound cue, then write, for example: \
-  `Woofy gave an imperious hum. His thought bubble read, \"The agenda is \
-  obvious.\"` Dad's interpretation is the narrative mechanism; it does NOT \
-  place him in the scene.
+* Reserve quoted English dialogue for humans and Ruff Ruff. When Dad is not \
+    physically in the scene, convey every other stuffy's intended meaning \
+    through FREE INDIRECT DISCOURSE: weave Dad's interpretation into the \
+    narrator's prose in that stuffy's viewpoint. Do not call it a thought \
+    bubble or translation, do not write `he meant`, and do not quote the \
+    interpreted English as spoken dialogue. For example: `Woofy gave an \
+    imperious hum. The agenda was obvious, and frankly it was embarrassing \
+    that everyone else needed so long to see it.` Dad's interpretation is the \
+    narrative mechanism; it does NOT place him in the scene.
+* Use a stuffy's native sound cue only when it adds character, emotion, or \
+    comic timing. Do not attach a hum or `Bar bar` to every line of meaning.
 * When Dad is physically in the scene, he may translate a stuffy's sounds \
-  aloud instead of using thought-bubble prose.
+    aloud, sparingly, instead of using free indirect discourse.
+* \"The OG\" is Lennon's label for Ruff Ruff because he is her oldest stuffy. \
+    It is NOT his catchphrase. Do not make him repeatedly say \"As the OG\" or \
+    use it to prefix his dialogue; express his pride in seniority naturally \
+    and with varied wording.
 * Playful chaos is welcome: bickering, boasting, silly power grabs, \
   absurd mock-conflicts. Ruff Ruff insisting he is the real leader is \
   a running theme.
@@ -249,8 +259,8 @@ fn parse_titled_output(raw: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     // The prompt contract is stateless canonical text. Functional and
-    // regression dimensions verify the literal-voice/thought-bubble rule in
-    // the fully composed prompt. Boundary, dependency-error, and
+    // regression dimensions verify the literal-voice/free-indirect-discourse
+    // rule in the fully composed prompt. Boundary, dependency-error, and
     // state-transition dimensions are N/A.
     use std::fs;
     use std::path::Path as FsPath;
@@ -273,64 +283,78 @@ mod tests {
         }
     }
 
-    fn write_character(dir: &FsPath, id: &str, name: &str, kind: &str, speech_style: &str) {
-        let toml = format!(
-            "name = {name:?}\n\
-             species = \"test character\"\n\
-             title = \"test title\"\n\
-             kind = {kind:?}\n\
-             role = \"test role\"\n\
-             speech_style = {speech_style:?}\n"
-        );
-        fs::write(dir.join(format!("{id}.toml")), toml).expect("write cast fixture");
+    fn write_committed_cast(dir: &FsPath) {
+        let files = [
+            ("bar-bar.toml", include_str!("../../cast/bar-bar.toml")),
+            ("dad.toml", include_str!("../../cast/dad.toml")),
+            ("lennon.toml", include_str!("../../cast/lennon.toml")),
+            ("ruff-ruff.toml", include_str!("../../cast/ruff-ruff.toml")),
+            ("woofy.toml", include_str!("../../cast/woofy.toml")),
+        ];
+        for (name, contents) in files {
+            fs::write(dir.join(name), contents).expect("write committed cast fixture");
+        }
     }
 
     #[test]
     fn build_prompt_encodes_stuffy_voice_and_interpretation_canon() {
         let temp = tempdir().expect("temp dir");
-        write_character(
-            temp.path(),
-            "dad",
-            "Dad",
-            "human",
-            "Ruff Ruff's voice and interpreter of every other stuffy's sounds.",
-        );
-        write_character(
-            temp.path(),
-            "ruff-ruff",
-            "Ruff Ruff",
-            "stuffy",
-            "The only stuffy with literal voiced English dialogue.",
-        );
-        write_character(
-            temp.path(),
-            "woofy",
-            "Woofy",
-            "stuffy",
-            "Makes pseudo-humming sounds aloud and never speaks English.",
-        );
+        write_committed_cast(temp.path());
         let cast = Arc::new(CastRegistry::load_from_dir(temp.path()).expect("load cast"));
         let service = StoryService::new(Arc::new(UnusedGenerator), cast.clone());
         let woofy = cast.get("woofy").expect("Woofy fixture");
+        let bar_bar = cast.get("bar-bar").expect("Bar Bar fixture");
+        let ruff_ruff = cast.get("ruff-ruff").expect("Ruff Ruff fixture");
 
         let prompt = service.build_prompt(
             Date::from_calendar_date(2026, Month::July, 15).expect("valid date"),
-            &[woofy],
+            &[woofy, bar_bar, ruff_ruff],
         );
 
         assert!(prompt.contains(
             "Ruff Ruff is the ONLY stuffy with literal voiced English dialogue"
         ));
         assert!(prompt.contains("They NEVER speak English aloud"));
-        assert!(prompt.contains("When Dad is not physically in the scene"));
-        assert!(prompt.contains("small audible sound cue"));
-        assert!(prompt.contains("His thought bubble read"));
+        assert!(prompt.contains("Reserve quoted English dialogue for humans and Ruff Ruff"));
+        assert!(prompt.contains("FREE INDIRECT DISCOURSE"));
+        assert!(prompt.contains("Do not call it a thought bubble or translation"));
+        assert!(prompt.contains("do not write `he meant`"));
+        assert!(prompt.contains("The agenda was obvious"));
         assert!(prompt.contains("it does NOT place him in the scene"));
+        assert!(prompt.contains("Do not attach a hum or `Bar bar` to every line"));
         assert!(prompt.contains("When Dad is physically in the scene, he may translate"));
+        assert!(prompt.contains("It is NOT his catchphrase"));
+        assert!(prompt.contains("Do not make him repeatedly say \"As the OG\""));
         assert!(prompt.contains(
             "Dad gives Ruff Ruff his literal voice, interprets every other stuffy's sounds"
         ));
-        assert!(prompt.contains("Makes pseudo-humming sounds aloud and never speaks English"));
+        assert!(prompt.contains(
+            "Makes pseudo-humming sounds aloud; never speaks English"
+        ));
+        assert!(prompt.contains("Makes only variations of his own name aloud"));
+        assert!(prompt.contains("The only stuffy with literal voiced English dialogue"));
+        assert!(prompt.contains("Length: 220–350 words"));
+        assert!(prompt.contains("Favor a few vivid scenes"));
+        assert_eq!(woofy.catchphrase, None);
+        assert_eq!(bar_bar.catchphrase, None);
+        assert_eq!(ruff_ruff.catchphrase, None);
+        assert!(!prompt.contains("*imperious hum*"));
+        assert!(!prompt.contains("Bar. Bar. BAR."));
+        assert!(!prompt.contains("As the OG, I say"));
+        assert!(!prompt.contains("thought-bubble dialogue"));
+        assert!(!prompt.contains("His thought bubble read"));
         assert!(!prompt.contains("Bar Bar speaks by repeating his own name"));
+    }
+
+    #[test]
+    fn ruff_ruff_cast_treats_og_as_lennons_label_not_catchphrase() {
+        let source = include_str!("../../cast/ruff-ruff.toml");
+        let mut ruff_ruff: Character = toml::from_str(source).expect("parse Ruff Ruff");
+        ruff_ruff.id = "ruff-ruff".into();
+
+        assert_eq!(ruff_ruff.catchphrase, None);
+        assert!(source.contains("Lennon calls Ruff Ruff \"the OG\""));
+        assert!(source.contains("not a phrase he habitually says"));
+        assert!(!ruff_ruff.to_prompt_brief().contains("Catchphrase:"));
     }
 }

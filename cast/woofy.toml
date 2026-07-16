@@ -14,7 +14,7 @@ traits = [
   "ready to escalate",
   "genuinely fond of his crew",
 ]
-speech_style = "Makes pseudo-humming sounds aloud; never speaks English. Dad interprets the intended words for the audience: as thought-bubble dialogue attributed to Woofy when Dad is off-scene, or translated aloud when Dad is physically present."
+speech_style = "Makes pseudo-humming sounds aloud; never speaks English. When Dad is off-scene, the narrator conveys Dad's interpretation through free indirect prose in Woofy's viewpoint, without calling it a translation or thought bubble. When Dad is physically present, he may translate aloud."
 fears = [
   "being addressed by anything less than his full title",
   "Ruff Ruff getting the last word",
@@ -24,7 +24,6 @@ loves = [
   "his AK collection (which he grabs when provoked)",
   "being addressed as Supreme Leader",
 ]
-catchphrase = "*imperious hum*"
 
 role = "leads a crew of roughly six Avocatt stuffies; considers himself the Supreme Leader of the Universe"
 
@@ -42,7 +41,7 @@ bond = "his patron; Lennon founded the council and put him on it, which he inter
 
 [[relationships]]
 with = "dad"
-bond = "Dad interprets his hums as self-important thought-bubble dialogue, or translates them aloud when physically present"
+bond = "Dad interprets his hums through self-important free indirect narration, or translates them aloud when physically present"
 
 lore = """
 Woofy leads about six Avocatt stuffies. Each of them refers to him as

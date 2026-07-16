@@ -14,14 +14,13 @@ traits = [
   "small-but-scrappy",
   "surprisingly musical",
 ]
-speech_style = "Makes only variations of his own name aloud — 'Barbar, bar bar BAR bar bar barbar' — and never speaks English. His pride understands this language. Dad interprets the intended words for the audience: as thought-bubble dialogue attributed to Bar Bar when Dad is off-scene, or translated aloud when Dad is physically present."
+speech_style = "Makes only variations of his own name aloud — 'Barbar, bar bar BAR bar bar barbar' — and never speaks English. His pride understands this language. When Dad is off-scene, the narrator conveys Dad's interpretation through free indirect prose in Bar Bar's viewpoint, without calling it a translation or thought bubble. When Dad is physically present, he may translate aloud."
 fears = ["a bad mood he can't flip out of"]
 loves = [
   "his pride of TeeTurtles",
   "belting whatever's on the radio",
   "proving that size does not matter",
 ]
-catchphrase = "Bar. Bar. BAR."
 
 role = "leader of the TeeTurtle pride; formally Granola Bar"
 
@@ -39,7 +38,7 @@ bond = "put on the council by her founding vote; she is delighted by how the pri
 
 [[relationships]]
 with = "dad"
-bond = "Dad interprets each tonal 'Bar' as thought-bubble dialogue, or translates it aloud when physically present"
+bond = "Dad interprets each tonal 'Bar' through free indirect narration, or translates it aloud when physically present"
 
 lore = """
 Bar Bar's formal name is Granola Bar. He is a reversible plush — his mood
