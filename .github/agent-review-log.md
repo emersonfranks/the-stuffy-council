@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -1318,4 +1318,128 @@ pre-existing warnings.
 - fix:  Reworded both comments to describe the shared frame and permanent
   fallback.
 - status: Fixed
+
+## 2026-07-18 — issue-8 phase-one portraits and landing roster
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.8 + GPT-5.6 Sol; Claude Opus 4.7 after BLOCK fix (copilot)
+- Delegated:      no
+- Files:
+  - static/stuffies/review/bar-bar--candidate-faithful.png (new)
+  - static/stuffies/review/bar-bar--candidate-storybook.png (new)
+  - static/stuffies/review/woofy--candidate-regal.png (new)
+  - static/stuffies/review/woofy--candidate-commanding.png (new)
+  - src/routes/characters.rs
+  - src/routes/home.rs
+  - templates/home.html
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added two transparent review portraits each for Bar Bar and
+Woofy without promoting canonical art before family selection. The landing
+spotlight now includes all five cast members in name order, including
+off-council Ruff Ruff, while missing canonical portraits retain silhouettes.
+Generic gallery and real-static-route tests cover all candidate files.
+Touched-file rustfmt and `cargo check` pass; 66 unit + 15 integration tests
+pass; clippy reports only the six baseline warnings. The final follow-up
+review returned `NO FINDINGS`.
+
+### Findings
+
+#### F1 — NIT | tests | src/routes/characters.rs | test name described the wrong filesystem scenario
+- what: `load_image_candidates_unreadable_directory_returns_contextual_error`
+  passed a regular file rather than an unreadable directory.
+- why:  Test names must state the actual scenario so future agents do not
+  infer permission-error coverage that does not exist.
+- fix:  Renamed it to
+  `load_image_candidates_path_is_file_returns_contextual_error`.
+- status: Fixed
+
+#### F2 — BLOCK | correctness | static/stuffies/review/bar-bar--candidate-storybook.png | floor-shadow antialiasing remained after initial cutout
+- what: The generated gray oval was transparent internally, but a faint
+  antialiased ellipse perimeter remained visible on a contrasting background.
+- why:  The issue specification and art bible prohibit baked floor shadows;
+  family selection must compare compliant candidates.
+- fix:  Removed the residual neutral component while preserving Bar Bar's
+  colored core and sticker edge, normalized hidden transparent RGB to black,
+  and verified the result on a fresh teal composite. Claude Opus 4.7's
+  required post-BLOCK review returned `NO FINDINGS`.
+- status: Fixed
+
+## 2026-07-18 — Woofy selection and four-choice Bar Bar gallery
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - static/stuffies/woofy.png (new)
+  - static/stuffies/review/woofy--candidate-regal.png (deleted)
+  - static/stuffies/review/woofy--candidate-commanding.png (deleted)
+  - static/stuffies/review/bar-bar--candidate-faithful.png (deleted)
+  - static/stuffies/review/bar-bar--candidate-storybook.png (deleted)
+  - static/stuffies/review/bar-bar--candidate-well-loved-happy.png (new)
+  - static/stuffies/review/bar-bar--candidate-well-loved-angry.png (new)
+  - static/stuffies/review/bar-bar--candidate-bold-happy.png (new)
+  - static/stuffies/review/bar-bar--candidate-bold-angry.png (new)
+  - src/routes/characters.rs
+  - tests/router_smoke.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: promoted the family-selected Woofy Regal portrait to the
+canonical 512×512 transparent asset and removed Woofy's review candidates.
+Replaced Bar Bar's phase-one drafts with four 1024×1024 transparent review
+choices: Well Loved Happy, Well Loved Angry, Bold Happy, and Bold Angry.
+Candidate-discovery coverage asserts all four sorted labels and URLs, and
+real-static-service tests cover every review asset. Touched-file rustfmt,
+focused tests, and `cargo check` pass.
+
+### Findings
+
+#### F1 — MINOR | other | static/stuffies/review/bar-bar--candidate-bold-happy.png | initial Scruffier label overstated the visible wear difference
+- what: The second happy candidate was not visibly scruffier than Well Loved
+  Happy at gallery size; its actual distinction was a bolder, more saturated
+  treatment.
+- why:  Artifact names must match their scope and semantics so agents and
+  family reviewers can understand the current state in one read.
+- fix:  Renamed the matched pair and files from Scruffier Happy/Angry to Bold
+  Happy/Angry, then updated discovery and real-static-route tests.
+- status: Fixed
+
+#### F2 — NIT | tests | src/routes/characters.rs | Woofy phase-one test name implied removed candidates remained active
+- what: The candidate-filtering test retained phase-one Woofy names after the
+  family selected Regal and both review files were removed.
+- why:  Test names must state the behavior and scenario rather than preserve a
+  stale project phase.
+- fix:  Reframed the test as generic requested-character filtering with neutral
+  Alpha/Beta fixtures.
+- status: Fixed
+
+## 2026-07-18 — finalize issue-8 selected portraits
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - static/stuffies/woofy.png (new)
+  - static/stuffies/bar-bar.png (new)
+  - static/stuffies/bar-bar--angry.png (new)
+  - src/routes/characters.rs
+  - src/routes/home.rs
+  - templates/home.html
+  - tests/router_smoke.rs
+  - docs/character-art.md
+  - .github/agent-review-log.md
+
+Change summary: finalized family selections for issue #8. Woofy Regal and Bar
+Bar Well Loved Happy are canonical 512×512 transparent portraits. Bar Bar Well
+Loved Angry remains a 512×512 named variant for future scenes. Temporary review
+files are removed, the landing spotlight shows all five cast members with
+canonical portraits for all three stuffies, and Dad/Lennon retain silhouette
+fallbacks. Touched-file rustfmt and `cargo check` pass; 65 unit + 14 integration
+tests pass. Strict clippy retains only the six documented baseline warnings.
+
+### Findings
+
+NO FINDINGS
 

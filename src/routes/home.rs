@@ -7,6 +7,7 @@ use time::OffsetDateTime;
 use tower_sessions::Session;
 
 use crate::auth::{SESSION_USER_KEY, SessionUser};
+use crate::cast::CastRegistry;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::story_repo;
@@ -21,8 +22,6 @@ struct HomeTemplate<'a> {
     has_today: bool,
     today_title: String,
     today_iso: String,
-    /// On-council cast for the spotlight strip. Borrows the registry, which
-    /// lives as long as `state` for the duration of the handler.
     spotlight: Vec<CharacterPortrait<'a>>,
 }
 
@@ -45,13 +44,7 @@ pub async fn index(State(state): State<AppState>, session: Session) -> AppResult
     let today = OffsetDateTime::now_utc().date();
     let cached = story_repo::get(&state.db, today).await?;
 
-    let mut spotlight: Vec<CharacterPortrait<'_>> = state
-        .cast
-        .all()
-        .filter(|character| character.on_council)
-        .map(portrait::for_character)
-        .collect();
-    spotlight.sort_by(|a, b| a.character.name.cmp(&b.character.name));
+    let spotlight = landing_spotlight(&state.cast);
 
     let tpl = HomeTemplate {
         display_name: user.display_name,
@@ -64,6 +57,12 @@ pub async fn index(State(state): State<AppState>, session: Session) -> AppResult
     Ok(render(&tpl)?.into_response())
 }
 
+fn landing_spotlight(cast: &CastRegistry) -> Vec<CharacterPortrait<'_>> {
+    let mut spotlight: Vec<_> = cast.all().map(portrait::for_character).collect();
+    spotlight.sort_by(|left, right| left.character.name.cmp(&right.character.name));
+    spotlight
+}
+
 pub async fn today(State(state): State<AppState>, session: Session) -> AppResult<Response> {
     if require_user(&session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
@@ -72,25 +71,24 @@ pub async fn today(State(state): State<AppState>, session: Session) -> AppResult
     let today = OffsetDateTime::now_utc().date();
 
     // Cache-then-generate. If the model call fails (e.g. Ollama offline) we return an error.
-    let (title, body, cast_ids, model) = if let Some(cached) =
-        story_repo::get(&state.db, today).await?
-    {
-        (cached.title, cached.body, cached.cast, cached.model)
-    } else {
-        tracing::info!(date = %today, "no cached story; generating");
-        let generated = state
-            .stories
-            .generate_for(today)
-            .await
-            .map_err(AppError::Internal)?;
-        story_repo::put(&state.db, today, &generated).await?;
-        (
-            generated.title,
-            generated.body,
-            generated.cast,
-            generated.model,
-        )
-    };
+    let (title, body, cast_ids, model) =
+        if let Some(cached) = story_repo::get(&state.db, today).await? {
+            (cached.title, cached.body, cached.cast, cached.model)
+        } else {
+            tracing::info!(date = %today, "no cached story; generating");
+            let generated = state
+                .stories
+                .generate_for(today)
+                .await
+                .map_err(AppError::Internal)?;
+            story_repo::put(&state.db, today, &generated).await?;
+            (
+                generated.title,
+                generated.body,
+                generated.cast,
+                generated.model,
+            )
+        };
 
     let cast_names = cast_ids
         .iter()
@@ -130,12 +128,76 @@ fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
 
 #[cfg(test)]
 mod tests {
-    // Home portrait rendering is a stateless template projection. Functional
-    // and fallback branches are covered; negative, dependency-error, and
-    // state-transition dimensions belong to portrait::canonical_src tests.
-    use crate::cast::Character;
+    // Home portrait rendering is a stateless template projection. Functional,
+    // ordering, and fallback branches are covered; negative, dependency-error,
+    // and state-transition dimensions belong to portrait::canonical_src tests.
+    use crate::cast::{CastRegistry, Character};
 
     use super::*;
+
+    fn current_cast() -> CastRegistry {
+        CastRegistry::load_from_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cast"))
+            .expect("load current cast")
+    }
+
+    #[test]
+    fn landing_spotlight_current_cast_includes_off_council_character_sorted_by_name() {
+        let cast = current_cast();
+
+        let spotlight = landing_spotlight(&cast);
+        let names: Vec<_> = spotlight
+            .iter()
+            .map(|item| item.character.name.as_str())
+            .collect();
+        let ruff_ruff = spotlight
+            .iter()
+            .find(|item| item.character.id == "ruff-ruff")
+            .expect("Ruff Ruff in landing spotlight");
+
+        assert_eq!(
+            names,
+            vec!["Bar Bar", "Dad", "Lennon", "Ruff Ruff", "Woofy"]
+        );
+        assert!(!ruff_ruff.character.on_council);
+    }
+
+    #[test]
+    fn landing_spotlight_current_stuffies_use_canonical_portraits() {
+        let cast = current_cast();
+
+        let spotlight = landing_spotlight(&cast);
+        let canonical_portraits: Vec<_> = spotlight
+            .iter()
+            .filter_map(|item| {
+                item.image_src
+                    .as_deref()
+                    .map(|src| (item.character.id.as_str(), src))
+            })
+            .collect();
+
+        assert_eq!(
+            canonical_portraits,
+            vec![
+                ("bar-bar", "/static/stuffies/bar-bar.png"),
+                ("ruff-ruff", "/static/stuffies/ruff-ruff.png"),
+                ("woofy", "/static/stuffies/woofy.png"),
+            ]
+        );
+    }
+
+    #[test]
+    fn landing_spotlight_humans_without_canonical_art_use_silhouette_fallbacks() {
+        let cast = current_cast();
+
+        let spotlight = landing_spotlight(&cast);
+        let fallback_ids: Vec<_> = spotlight
+            .iter()
+            .filter(|item| item.image_src.is_none())
+            .map(|item| item.character.id.as_str())
+            .collect();
+
+        assert_eq!(fallback_ids, vec!["dad", "lennon"]);
+    }
 
     fn character() -> Character {
         Character {

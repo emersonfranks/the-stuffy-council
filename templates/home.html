@@ -18,7 +18,7 @@
 <p class="sc-muted mb-5">Hi, {{ display_name }} — the council&rsquo;s been waiting up.</p>
 
 {% if !spotlight.is_empty() %}
-<section aria-label="The council" class="sc-spotlight mb-8">
+<section aria-label="The cast and crew" class="sc-spotlight mb-8">
   {% for item in spotlight %}
   <a class="sc-spot" href="/council/{{ item.character.id }}" data-accent="{{ item.character.accent() }}">
     <span class="sc-portrait sc-portrait--spot">{% match item.image_src %}{% when Some with (src) %}<img src="{{ src }}" alt="" width="512" height="512" />{% when None %}<span class="sc-portrait__ph"></span>{% endmatch %}</span>
