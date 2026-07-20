@@ -113,6 +113,11 @@ Consistency rules:
 
 ### Bar Bar — `bar-bar.png` · frame tint lavender
 
+The Well Loved Happy design was selected during family review on 2026-07-17
+and is the canonical 512×512 transparent portrait at
+`static/stuffies/bar-bar.png`. The matching Well Loved Angry face is retained
+as the 512×512 named variant `static/stuffies/bar-bar--angry.png`.
+
 ```
 CHARACTER — Bar Bar (formal name Granola Bar), a small round REVERSIBLE
 plush lion: body shaped like a fuzzy ball wrapped in a full two-tone orange
@@ -128,6 +133,10 @@ secretly musical.
 ```
 
 ### Woofy — `woofy.png` · frame tint mint
+
+The Regal design with a small crown was selected during family review on
+2026-07-17 and is the canonical 512×512 transparent portrait at
+`static/stuffies/woofy.png`.
 
 ```
 CHARACTER — Woofy, a chunky, huggable plush husky-wolf in a cute sitting

@@ -258,6 +258,30 @@ mod tests {
     }
 
     #[test]
+    fn load_image_candidates_returns_requested_character_and_ignores_other_characters() {
+        let temp = tempdir().expect("temp dir");
+        touch(&temp.path().join("woofy--candidate-alpha.png"));
+        touch(&temp.path().join("woofy--candidate-beta.png"));
+        touch(&temp.path().join("bar-bar--candidate-alpha.png"));
+
+        let candidates = load_image_candidates(temp.path(), "woofy").expect("load candidates");
+
+        assert_eq!(
+            candidates,
+            vec![
+                ImageCandidate {
+                    src: "/static/stuffies/review/woofy--candidate-alpha.png".into(),
+                    label: "Alpha".into(),
+                },
+                ImageCandidate {
+                    src: "/static/stuffies/review/woofy--candidate-beta.png".into(),
+                    label: "Beta".into(),
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn load_image_candidates_missing_directory_returns_empty() {
         let temp = tempdir().expect("temp dir");
         let missing = temp.path().join("missing");
@@ -287,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn load_image_candidates_unreadable_directory_returns_contextual_error() {
+    fn load_image_candidates_path_is_file_returns_contextual_error() {
         let temp = tempdir().expect("temp dir");
         let file = temp.path().join("not-a-directory");
         touch(&file);
@@ -326,9 +350,7 @@ mod tests {
         assert!(body.contains("id=\"art-candidates-heading\""));
         assert!(body.contains("src=\"/static/stuffies/review/ruff-ruff--candidate-clean.png\""));
         assert!(body.contains("alt=\"Ruff Ruff art candidate: Well Loved\""));
-        assert!(body.contains(
-            "src=\"/static/stuffies/ruff-ruff.png\" alt=\"Ruff Ruff\""
-        ));
+        assert!(body.contains("src=\"/static/stuffies/ruff-ruff.png\" alt=\"Ruff Ruff\""));
     }
 
     #[test]

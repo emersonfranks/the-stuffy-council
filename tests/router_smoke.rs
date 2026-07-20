@@ -157,6 +157,21 @@ async fn static_ruff_ruff_portrait_is_served_as_png() -> Result<()> {
     assert_static_png_is_served("/static/stuffies/ruff-ruff.png").await
 }
 
+#[tokio::test]
+async fn static_bar_bar_portrait_is_served_as_png() -> Result<()> {
+    assert_static_png_is_served("/static/stuffies/bar-bar.png").await
+}
+
+#[tokio::test]
+async fn static_bar_bar_angry_variant_is_served_as_png() -> Result<()> {
+    assert_static_png_is_served("/static/stuffies/bar-bar--angry.png").await
+}
+
+#[tokio::test]
+async fn static_woofy_portrait_is_served_as_png() -> Result<()> {
+    assert_static_png_is_served("/static/stuffies/woofy.png").await
+}
+
 /// The off-allowlist denial renders its in-voice message on the login page.
 #[tokio::test]
 async fn login_denied_error_renders_in_voice_copy() -> Result<()> {
