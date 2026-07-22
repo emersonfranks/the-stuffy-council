@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -1442,4 +1442,49 @@ tests pass. Strict clippy retains only the six documented baseline warnings.
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-22 — remove unused session secret
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - .env.example
+  - .github/instructions/test-quality.instructions.md
+  - AGENTS.md
+  - README.md
+  - cast/ruff-ruff.toml
+  - docs/dev-setup.md
+  - src/config.rs
+  - tests/common/mod.rs
+  - .github/agent-review-log.md
+
+Change summary: verified tower-sessions uses an opaque cookie id backed by the
+SQLite session store and consumes no signing key. Removed the unused session
+secret from configuration, test fixtures, setup instructions, and deployment
+examples. Extracted deterministic config lookup and added minimum-environment
+plus required-client-id tests. Included the user-required Ruff Ruff canon
+correction from "stuffed dog" to "stuffed pog." Touched-file rustfmt passes;
+67 unit + 14 integration tests pass. Strict clippy retains only the six
+documented baseline warnings.
+
+### Findings
+
+#### F1 — MAJOR | docs | docs/dev-setup.md | setup outcome still promised a session secret
+- what: The runbook's outcome list retained a prose-only session-secret
+  requirement after the variable and Step 5 instructions were removed.
+- why:  Agent-facing documentation must remain factual when configuration
+  requirements change.
+- fix:  Changed the outcome to promise only a `.env` with the Google client id
+  and rescanned active docs for both token and prose variants.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/config.rs | injected config seam had happy-path-only coverage
+- what: The new deterministic lookup test proved valid defaults but did not
+  exercise a parser rejection branch.
+- why:  Parsers require negative validation under the repository test-quality
+  policy.
+- fix:  Added a missing-Google-client-id test asserting the exact required
+  error through the same injected lookup seam.
+- status: Fixed
 

@@ -13,7 +13,7 @@ Keep it terse and copy-pasteable; if a step stops being true, fix the step.
 
 - Rust 1.97 toolchain (pinned by [../rust-toolchain.toml](../rust-toolchain.toml)).
 - Ollama running locally on `127.0.0.1:11434` with one model pulled.
-- A `.env` with a real session secret + your Google client id.
+- A `.env` with your Google client id.
 - Your Gmail in the committed allowlist.
 - The app on `http://localhost:8080`, and a story cached in SQLite.
 
@@ -139,18 +139,13 @@ Sign-in is delegated to Google Identity Services. The server holds only a
 cp .env.example .env
 ```
 
-Then edit `.env` and set two values (leave the rest at defaults):
-
-- `SESSION_SECRET` — 64+ random chars. Generate one:
-  - macOS / Linux / Git Bash: `openssl rand -hex 64`
-  - Windows PowerShell (CSPRNG, 128 hex chars): `$b = New-Object byte[] 64; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })`
-- `GOOGLE_CLIENT_ID` — paste the id from step 4.
+Then edit `.env` and set `GOOGLE_CLIENT_ID` to the id from step 4. Leave
+the rest at defaults.
 
 Do **not** commit `.env` (it is git-ignored). The full config surface is
 documented inline in [../.env.example](../.env.example).
 
-**Verify:** `grep -E '^(SESSION_SECRET|GOOGLE_CLIENT_ID)=' .env` shows both
-filled in, and `SESSION_SECRET` is not the placeholder from the example.
+**Verify:** `grep '^GOOGLE_CLIENT_ID=' .env` shows the id from step 4.
 
 ## Step 6 — Add yourself to the allowlist
 
@@ -234,11 +229,6 @@ instead.
 
 You opened `127.0.0.1:8080`. Use `http://localhost:8080` — Google GIS
 rejects `127.0.0.1` for plain-HTTP local dev.
-
-### Boot error: `SESSION_SECRET`
-
-It must be 64+ characters; in production it must also differ from the
-example value. Regenerate with the step 5 command.
 
 ### Boot error: authorized users list is empty
 

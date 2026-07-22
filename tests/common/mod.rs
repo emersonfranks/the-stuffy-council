@@ -62,7 +62,6 @@ pub async fn build_test_app() -> Result<TestApp> {
         env: Environment::Development,
         bind_addr: "127.0.0.1:0".parse().unwrap(),
         public_origin: "http://localhost".to_string(),
-        session_secret: vec![0u8; 64],
         database_url: db_url,
         google_client_id: "test-client-id.apps.googleusercontent.com".to_string(),
         ollama_url: "http://127.0.0.1:11434".to_string(),

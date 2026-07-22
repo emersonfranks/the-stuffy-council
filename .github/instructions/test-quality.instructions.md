@@ -120,8 +120,8 @@ subagent review log entry. Do not pretend unit coverage substitutes.
   internal call sequences. Assert on observable outputs and side effects.
 - **Missing negative validation** — happy-path-only suites. Every route
   needs ≥1 4xx / redirect test; every parser needs ≥1 rejection test.
-- **Missing boundary validation** — no zero/empty/max tests on
-  bounded inputs (e.g. `SESSION_SECRET` min-length, allowlist empty).
+- **Missing boundary validation** — no zero/empty/max tests on bounded
+  inputs (e.g. allowlist empty, configured numeric limits).
 - **Environmental dependency** — live external HTTP, real Ollama, real
   Google JWKS in a unit test. Use `tempfile` for on-disk state; use
   ephemeral `TcpListener` + `reqwest` for integration; feature-gate any

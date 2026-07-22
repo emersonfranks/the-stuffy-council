@@ -35,7 +35,6 @@ open-source LLM (Ollama) for the story text.
 # 1. Config
 cp .env.example .env
 # Edit .env — at minimum:
-#  * SESSION_SECRET to 64+ random bytes (`openssl rand -hex 64`).
 #  * GOOGLE_CLIENT_ID from a Google Cloud Console OAuth 2.0 Web-application
 #    credential. That value is PUBLIC (safe to embed in HTML); there is
 #    NO client secret in this project. In the credential add:
@@ -111,7 +110,7 @@ Azure Container Apps notes.
 ```bash
 docker build -t stuffy-council:local .
 docker run --rm -p 8080:8080 \
-  -e SESSION_SECRET=... \
+  -e GOOGLE_CLIENT_ID=... \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
   -v stuffy-data:/data \
   stuffy-council:local
