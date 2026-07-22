@@ -98,9 +98,11 @@ docs/
 5. **Model output IS untrusted input.** When we display a story we split on
    `\n\n` and render each paragraph as text; do not switch to Markdown
    rendering without a hardened renderer + strict allowlist.
-6. **Secrets live in env vars, not the repo.** `.env` is git-ignored;
-   `.env.example` documents the surface. `SESSION_SECRET` must be 64+
-   chars in production and must not match the example value.
+6. **Secrets live in env vars or platform secret references, not the repo.**
+  `.env` is git-ignored; `.env.example` documents the non-secret config
+  surface. Sessions are server-side in SQLite and the cookie carries only
+  an opaque random id; do not invent a signing secret unless the session
+  middleware is explicitly changed to consume one.
 7. **Prompt input to the LLM comes only from our own TOML.** If we later
    accept any user-controllable prompt input, treat it as untrusted and
    sanitize.
@@ -124,7 +126,6 @@ cargo run   # → http://localhost:8080 (use `localhost`, NOT 127.0.0.1 —
 
 Key facts the runbook expands on:
 
-* `SESSION_SECRET` must be 64+ chars (`openssl rand -hex 64`).
 * `GOOGLE_CLIENT_ID` is the PUBLIC OAuth Web-application client id; there
   is NO client secret in this project.
 * Sign in with a Gmail listed in `authorized-users.toml` (edit + PR).
