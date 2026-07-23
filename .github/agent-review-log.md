@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: Gemini 3.6 Flash (copilot)
 
 # Agent Review Log
 
@@ -1782,4 +1782,27 @@ diagnostics; 94 unit + 20 integration tests remain green.
 - why:  Redundant configuration implies special handling that does not exist.
 - fix:  Removed the duplicate glob and retained the single `**/*.md` scope.
 - status: Fixed
+
+## 2026-07-23 — Rust documentation build gate
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Gemini 3.6 Flash (copilot)
+- Delegated:      no
+- Files:
+  - examples/doc_lint.rs
+  - .github/workflows/rust-ci.yml
+  - .github/instructions/agent-authoring.instructions.md
+  - .github/agent-review-log.md
+
+Change summary: corrected the rad-service adaptation by adding its build-gate
+pattern in Rust rather than C#. The Cargo example scans Git-tracked Markdown,
+checks relative links and root placement, enforces the exact markdownlint
+exception/review-log parser contract, and runs before Rust compilation in CI.
+No new dependency, runtime, package manager, or third-party Markdown action is
+introduced. Two parser tests, strict all-target clippy, the doc gate, and the
+full 94 unit + 20 integration suite pass.
+
+### Findings
+
+NO FINDINGS
 

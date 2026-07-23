@@ -29,6 +29,9 @@ jobs:
       - name: Cache Cargo and build outputs
         uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
+      - name: Lint documentation
+        run: cargo run --example doc_lint -- --repo-root .
+
       - name: Check
         run: cargo check
 
