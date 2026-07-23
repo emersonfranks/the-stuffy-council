@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: Claude Opus 4.7 (copilot)
 
 # Agent Review Log
 
@@ -1681,4 +1681,62 @@ repository-wide staged-blob CR scanning, and diff/binary audits pass; 92 unit
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-23 — Rust CI checks
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.7 (copilot)
+- Delegated:      no
+- Files:
+  - .github/workflows/rust-ci.yml
+  - rust-toolchain.toml
+  - src/story_repo.rs
+  - src/access.rs
+  - src/web/security.rs
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added read-only GitHub Actions CI for main pushes and pull
+requests with immutable action pins, Rust 1.97, Cargo caching, check, strict
+clippy, and release build. Cleared the three prior clippy blockers with
+behavior-preserving changes, added `AccessList::is_empty` coverage, and added
+unit plus real-server security-header coverage. The exact CI sequence and the
+full 94 unit + 20 integration suite pass locally.
+
+### Findings
+
+#### F1 — MINOR | tests | src/web/security.rs | security-header wire-up lacked real-server coverage
+- what: Unit tests proved `header_layers` output but deleting its application
+  in `serve` would leave them green.
+- why:  Security changes require tier-2 cross-component coverage.
+- fix:  Extended the real `/login` smoke test to assert CSP and baseline
+  security headers are present and development HSTS is absent.
+- status: Fixed
+
+#### F2 — NIT | correctness | .github/workflows/rust-ci.yml | toolchain version duplicated without coupling signal
+- what: The workflow and rust-toolchain.toml both pin 1.97.0.
+- why:  Future upgrades must update both locations intentionally.
+- fix:  Added reciprocal keep-in-sync comments.
+- status: Fixed
+
+#### F3 — NIT | correctness | .github/workflows/rust-ci.yml | clippy command exceeded issue scope
+- what: The draft added `--all-features` although issue #13 specified only
+  `--all-targets`; no features currently exist.
+- why:  CI scope should change intentionally when features are introduced.
+- fix:  Removed `--all-features` and validated the exact issue command.
+- status: Fixed
+
+#### F4 — NIT | security | .github/workflows/rust-ci.yml | third-party actions used floating refs
+- what: Checkout, Rust toolchain, and cache actions could move underneath CI.
+- why:  Immutable action inputs reduce poisoned-pipeline risk.
+- fix:  Resolved each upstream ref and pinned its full commit SHA with a tag
+  comment.
+- status: Fixed
+
+#### F5 — NIT | agent-authoring | .github/workflows/rust-ci.yml | least-privilege intent was undocumented
+- what: The read-only permissions block could be broadened as incidental
+  cleanup by a future change.
+- why:  Security assertions that should not be relaxed need a concise why.
+- fix:  Added a one-line comment requiring per-job review before broadening.
+- status: Fixed
 

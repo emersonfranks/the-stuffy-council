@@ -47,7 +47,7 @@ pub async fn get(pool: &SqlitePool, date: Date) -> Result<Option<CachedStory>> {
         date: parsed_date,
         title: row.title,
         body: row.body,
-        cast: cast,
+        cast,
         model: row.model,
     }))
 }

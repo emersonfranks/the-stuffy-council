@@ -26,8 +26,8 @@ pub struct AccessList {
 impl AccessList {
     pub fn load_from_file(path: impl AsRef<Path>, env: Environment) -> Result<Self> {
         let path = path.as_ref();
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
 
         #[derive(Deserialize)]
         struct File {
@@ -41,8 +41,8 @@ impl AccessList {
             admin: bool,
         }
 
-        let file: File = toml::from_str(&text)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let file: File =
+            toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
 
         let mut by_email: BTreeMap<String, AuthorizedUser> = BTreeMap::new();
         for entry in file.users {
@@ -51,17 +51,9 @@ impl AccessList {
                 return Err(anyhow!("empty email in {}", path.display()));
             }
             if by_email.contains_key(&email) {
-                return Err(anyhow!(
-                    "duplicate email `{email}` in {}",
-                    path.display()
-                ));
+                return Err(anyhow!("duplicate email `{email}` in {}", path.display()));
             }
-            by_email.insert(
-                email,
-                AuthorizedUser {
-                    admin: entry.admin,
-                },
-            );
+            by_email.insert(email, AuthorizedUser { admin: entry.admin });
         }
 
         if env == Environment::Production && by_email.is_empty() {
@@ -80,6 +72,10 @@ impl AccessList {
 
     pub fn len(&self) -> usize {
         self.by_email.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_email.is_empty()
     }
 }
 
@@ -103,13 +99,13 @@ mod tests {
 
     #[test]
     fn load_from_file_parses_one_admin_user() {
-        let (_tmp, path) = write_allow_file(
-            "[[users]]\nemail = \"alice@example.com\"\nadmin = true\n",
-        );
+        let (_tmp, path) =
+            write_allow_file("[[users]]\nemail = \"alice@example.com\"\nadmin = true\n");
 
         let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
 
         assert_eq!(list.len(), 1);
+        assert!(!list.is_empty());
         let entry = list.check("alice@example.com").expect("match");
         assert!(entry.admin);
     }
@@ -138,9 +134,8 @@ mod tests {
 
     #[test]
     fn check_trims_whitespace_on_lookup() {
-        let (_tmp, path) = write_allow_file(
-            "[[users]]\nemail = \"alice@example.com\"\nadmin = true\n",
-        );
+        let (_tmp, path) =
+            write_allow_file("[[users]]\nemail = \"alice@example.com\"\nadmin = true\n");
 
         let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
 
@@ -154,6 +149,7 @@ mod tests {
         let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
 
         assert_eq!(list.len(), 0);
+        assert!(list.is_empty());
         assert!(list.check("anyone@example.com").is_none());
     }
 
@@ -169,9 +165,8 @@ mod tests {
 
     #[test]
     fn emails_are_normalized_on_ingest_even_with_wrapping_whitespace() {
-        let (_tmp, path) = write_allow_file(
-            "[[users]]\nemail = \"  Bob@Example.com  \"\nadmin = false\n",
-        );
+        let (_tmp, path) =
+            write_allow_file("[[users]]\nemail = \"  Bob@Example.com  \"\nadmin = false\n");
 
         let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
 
@@ -231,9 +226,8 @@ mod tests {
 
     #[test]
     fn check_of_absent_email_returns_none() {
-        let (_tmp, path) = write_allow_file(
-            "[[users]]\nemail = \"alice@example.com\"\nadmin = false\n",
-        );
+        let (_tmp, path) =
+            write_allow_file("[[users]]\nemail = \"alice@example.com\"\nadmin = false\n");
 
         let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
 
@@ -255,4 +249,3 @@ mod tests {
         );
     }
 }
-

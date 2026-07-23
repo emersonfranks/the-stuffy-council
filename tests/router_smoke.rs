@@ -375,6 +375,7 @@ async fn get_login_returns_200_for_anonymous_visitor() -> Result<()> {
 
     let resp = client.get(format!("http://{addr}/login")).send().await?;
     let status = resp.status();
+    let headers = resp.headers().clone();
     let body = resp.text().await.unwrap_or_default();
 
     assert_eq!(
@@ -386,6 +387,10 @@ async fn get_login_returns_200_for_anonymous_visitor() -> Result<()> {
         body.contains("g_id_signin") || body.contains("Sign in with Google"),
         "login page missing Google Identity Services markup. body: {body}"
     );
+    assert!(headers.contains_key("content-security-policy"));
+    assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+    assert_eq!(headers.get("x-frame-options").unwrap(), "DENY");
+    assert!(!headers.contains_key("strict-transport-security"));
     Ok(())
 }
 
