@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -1487,4 +1487,28 @@ documented baseline warnings.
 - fix:  Added a missing-Google-client-id test asserting the exact required
   error through the same injected lookup seam.
 - status: Fixed
+
+## 2026-07-22 — complete config validation coverage
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - src/config.rs
+  - .github/agent-review-log.md
+
+Change summary: completed deterministic `Config` validation coverage through
+the injected lookup seam. Tests cover minimum defaults, every configured
+field, production/development regimes, origin fallback/trimming, required and
+blank client ids, unknown environments, invalid bind addresses, malformed
+numeric values, and zero boundaries. The boundary tests exposed that timeout
+and rate-limit fields accepted zero despite their positive-integer contract;
+typed parsers now reject malformed and zero values with the existing errors.
+Obsolete session-secret scenarios were excluded because PR #27 removed that
+unused configuration. Touched-file rustfmt passes; 80 unit + 14 integration
+tests pass. Strict clippy retains only six documented baseline warnings.
+
+### Findings
+
+NO FINDINGS
 
