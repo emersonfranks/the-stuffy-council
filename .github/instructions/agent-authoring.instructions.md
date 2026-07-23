@@ -133,6 +133,14 @@ For the review protocol below, that means:
 and any other markdown in this repo are all agent-facing docs and follow
 the same rules as source.
 
+- Run `cargo run --example doc_lint -- --repo-root .` and **Markdownlint: Lint
+  Workspace** in VS Code after changing Markdown. The Rust gate checks tracked
+  links and repository invariants; the installed extension consumes
+  [../../.markdownlint-cli2.jsonc](../../.markdownlint-cli2.jsonc) for style.
+- `.github/agent-review-log.md` is the only lint exclusion. Its line-1 reviewer
+  marker and repeated headings are protocol data; do not rewrite historical
+  entries or broaden the exclusion.
+
 - Terse, factual, scannable. Tables and bullet lists over paragraphs.
 - No marketing copy, no rationale for its own sake, no "welcome!" tone.
 - Every rule must be enforceable — by a test, a lint, a review checklist

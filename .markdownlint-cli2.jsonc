@@ -1,0 +1,10 @@
+{
+  // The review log is an append-only machine record. Its line-1 reviewer marker
+  // and repeated Findings/F1 headings are parsed by the rotation protocol.
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    ".github/agent-review-log.md"
+  ]
+}

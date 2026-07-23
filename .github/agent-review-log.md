@@ -1757,3 +1757,52 @@ selector and self-reported `Gemini 3.6 Flash`; no rotation semantics changed.
 
 NO FINDINGS
 
+## 2026-07-23 — deterministic Markdown diagnostics
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - .markdownlint-cli2.jsonc
+  - .github/instructions/agent-authoring.instructions.md
+  - .github/agent-review-log.md
+
+Change summary: mirrored rad-service's editor-native markdownlint convention
+without npm dependencies or a Markdown CI action. The checked-in CLI2 config
+lints tracked Markdown through the installed VS Code extension and excludes
+only the parser-sensitive append-only review log. Agent policy documents the
+workspace lint command and exception invariant. The clean merged issue-8
+worktree and stale temp spec were removed. VS Code reports zero workspace
+diagnostics; 94 unit + 20 integration tests remain green.
+
+### Findings
+
+#### F1 — NIT | agent-authoring | .markdownlint-cli2.jsonc | instructions glob was redundant
+- what: `**/*.instructions.md` was fully subsumed by `**/*.md`.
+- why:  Redundant configuration implies special handling that does not exist.
+- fix:  Removed the duplicate glob and retained the single `**/*.md` scope.
+- status: Fixed
+
+## 2026-07-23 — Rust documentation build gate
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Gemini 3.6 Flash (copilot)
+- Delegated:      no
+- Files:
+  - examples/doc_lint.rs
+  - .github/workflows/rust-ci.yml
+  - .github/instructions/agent-authoring.instructions.md
+  - .github/agent-review-log.md
+
+Change summary: corrected the rad-service adaptation by adding its build-gate
+pattern in Rust rather than C#. The Cargo example scans Git-tracked Markdown,
+checks relative links and root placement, enforces the exact markdownlint
+exception/review-log parser contract, and runs before Rust compilation in CI.
+No new dependency, runtime, package manager, or third-party Markdown action is
+introduced. Two parser tests, strict all-target clippy, the doc gate, and the
+full 94 unit + 20 integration suite pass.
+
+### Findings
+
+NO FINDINGS
+
