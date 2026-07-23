@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.7 (copilot)
+Last reviewer: Gemini 3.6 Flash (copilot)
 
 # Agent Review Log
 
@@ -1739,4 +1739,21 @@ full 94 unit + 20 integration suite pass locally.
 - why:  Security assertions that should not be relaxed need a concise why.
 - fix:  Added a one-line comment requiring per-job review before broadening.
 - status: Fixed
+
+## 2026-07-23 — add Gemini reviewer
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Gemini 3.6 Flash (copilot)
+- Delegated:      no
+- Files:
+  - .github/instructions/agent-authoring.instructions.md
+  - .github/agent-review-log.md
+
+Change summary: added the verified `Gemini 3.6 Flash (copilot)` invocation to
+the rotating reviewer pool. The subagent runtime accepted that exact model
+selector and self-reported `Gemini 3.6 Flash`; no rotation semantics changed.
+
+### Findings
+
+NO FINDINGS
 

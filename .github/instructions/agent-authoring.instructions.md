@@ -188,6 +188,7 @@ review returns `BLOCK` findings.
 - `GPT-5.6 Sol (copilot)`
 - `Claude Opus 4.8 (copilot)`
 - `Claude Opus 4.7 (copilot)`
+- `Gemini 3.6 Flash (copilot)`
 
 Never invoke the same model in two consecutive reviews. If the chosen
 model is unavailable, pick another that still satisfies the "different
