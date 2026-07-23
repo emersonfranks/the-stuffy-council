@@ -63,7 +63,7 @@ pub async fn build_test_app_with_jwks_url(jwks_url: Option<&str>) -> Result<Test
 
     let http = reqwest::Client::new();
     let jwks = Arc::new(match jwks_url {
-        Some(url) => JwkCache::with_jwks_url(http, url.to_string()),
+        Some(url) => JwkCache::with_test_jwks_url(http, url.to_string()),
         None => JwkCache::new(http),
     });
 

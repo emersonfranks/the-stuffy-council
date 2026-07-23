@@ -91,12 +91,10 @@ pub struct JwkCache {
 
 impl JwkCache {
     pub fn new(http: reqwest::Client) -> Self {
-        Self::with_jwks_url(http, GOOGLE_JWKS_URL.to_string())
+        Self::with_url(http, GOOGLE_JWKS_URL.to_string())
     }
 
-    /// Test-only endpoint override; production MUST use [`Self::new`].
-    #[doc(hidden)]
-    pub fn with_jwks_url(http: reqwest::Client, jwks_url: String) -> Self {
+    fn with_url(http: reqwest::Client, jwks_url: String) -> Self {
         Self {
             keys: RwLock::new(HashMap::new()),
             http,
@@ -104,6 +102,12 @@ impl JwkCache {
             last_refresh_attempt: RwLock::new(None),
             refresh_mutex: Mutex::new(()),
         }
+    }
+
+    /// Integration-test endpoint override; production MUST use [`Self::new`].
+    #[doc(hidden)]
+    pub fn with_test_jwks_url(http: reqwest::Client, jwks_url: String) -> Self {
+        Self::with_url(http, jwks_url)
     }
 
     /// Unconditional fetch from the configured JWKS URL. Records the attempt
@@ -348,8 +352,8 @@ mod tests {
         url: String,
         hits: Arc<AtomicUsize>,
         release: Arc<Notify>,
-        // Server runs in a spawned task; dropping the handle aborts it.
-        _server: tokio::task::JoinHandle<()>,
+        // Dropping FakeJwks aborts the spawned server task.
+        server: tokio::task::JoinHandle<()>,
     }
 
     impl FakeJwks {
@@ -407,7 +411,7 @@ mod tests {
                 url: format!("http://{addr}/certs"),
                 hits,
                 release,
-                _server: server,
+                server,
             }
         }
 
@@ -422,8 +426,14 @@ mod tests {
         }
     }
 
+    impl Drop for FakeJwks {
+        fn drop(&mut self) {
+            self.server.abort();
+        }
+    }
+
     fn cache_pointed_at(url: &str) -> JwkCache {
-        JwkCache::with_jwks_url(reqwest::Client::new(), url.to_string())
+        JwkCache::with_url(reqwest::Client::new(), url.to_string())
     }
 
     // ---- decision-logic tests (no HTTP) --------------------------------

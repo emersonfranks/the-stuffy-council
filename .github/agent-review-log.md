@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.7 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -1577,5 +1577,33 @@ retains only three findings in untouched modules.
 - why:  Production verification must remain pinned to Google's JWKS endpoint.
 - fix:  Marked it `#[doc(hidden)]` and documented that production MUST use
   `JwkCache::new`.
+- status: Fixed
+
+## 2026-07-23 — PR 29 Copilot comment fixes
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - src/auth.rs
+  - tests/common/mod.rs
+  - tests/support/google_jwt.rs
+  - .github/agent-review-log.md
+
+Change summary: addressed both Copilot PR comments. Local JWKS fixture servers
+now retain their task handles and abort them on fixture drop, including the
+pre-existing unit fake. Production construction remains private and pinned to
+Google; the hidden public integration escape hatch is explicitly named
+`with_test_jwks_url`. Focused verifier and Google POST matrices pass, and the
+full 87 unit + 18 integration suite remains green.
+
+### Findings
+
+#### F1 — NIT | agent-authoring | src/auth.rs | fixture lifecycle comment repeated the old misconception
+- what: The field comment claimed dropping a Tokio `JoinHandle` aborts its
+  task, although dropping detaches it and the fixture's `Drop` calls abort.
+- why:  Comments must preserve the actual non-obvious lifecycle invariant.
+- fix:  Reworded the comment to state that dropping `FakeJwks` aborts the
+  spawned server task.
 - status: Fixed
 

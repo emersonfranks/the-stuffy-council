@@ -86,7 +86,7 @@ fn untrusted_signing_material() -> &'static SigningMaterial {
 pub struct GoogleJwtFixture {
     pub jwks_url: String,
     hits: Arc<AtomicUsize>,
-    _server: tokio::task::JoinHandle<()>,
+    server: tokio::task::JoinHandle<()>,
 }
 
 impl GoogleJwtFixture {
@@ -115,7 +115,7 @@ impl GoogleJwtFixture {
         Self {
             jwks_url: format!("http://{address}/certs"),
             hits,
-            _server: server,
+            server,
         }
     }
 
@@ -136,6 +136,12 @@ impl GoogleJwtFixture {
 
     pub fn hit_count(&self) -> usize {
         self.hits.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for GoogleJwtFixture {
+    fn drop(&mut self) {
+        self.server.abort();
     }
 }
 
