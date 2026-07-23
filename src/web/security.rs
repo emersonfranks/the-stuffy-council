@@ -50,31 +50,31 @@ base-uri 'self'; \
 object-src 'none'";
 
 pub fn header_layers(env: Environment) -> Vec<SetResponseHeaderLayer<HeaderValue>> {
-    let mut out = Vec::new();
-
-    out.push(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("content-security-policy"),
-        HeaderValue::from_static(CSP),
-    ));
-    out.push(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    ));
-    out.push(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("referrer-policy"),
-        HeaderValue::from_static("strict-origin-when-cross-origin"),
-    ));
-    out.push(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("permissions-policy"),
-        HeaderValue::from_static(
-            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+    let mut out = vec![
+        SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("content-security-policy"),
+            HeaderValue::from_static(CSP),
         ),
-    ));
-    // X-Frame-Options is legacy but still respected — CSP frame-ancestors is the modern equivalent.
-    out.push(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("x-frame-options"),
-        HeaderValue::from_static("DENY"),
-    ));
+        SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-content-type-options"),
+            HeaderValue::from_static("nosniff"),
+        ),
+        SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("referrer-policy"),
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ),
+        SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("permissions-policy"),
+            HeaderValue::from_static(
+                "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+            ),
+        ),
+        // X-Frame-Options is legacy but still respected; CSP frame-ancestors is the modern equivalent.
+        SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-frame-options"),
+            HeaderValue::from_static("DENY"),
+        ),
+    ];
 
     // HSTS is meaningful only over HTTPS; do not send it on plain-HTTP dev builds.
     if env == Environment::Production {
@@ -85,4 +85,54 @@ pub fn header_layers(env: Environment) -> Vec<SetResponseHeaderLayer<HeaderValue
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::routing::get;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    async fn response_for(env: Environment) -> axum::response::Response {
+        let mut app = Router::new().route("/", get(|| async { StatusCode::NO_CONTENT }));
+        for layer in header_layers(env) {
+            app = app.layer(layer);
+        }
+        app.oneshot(Request::new(Body::empty()))
+            .await
+            .expect("security header response")
+    }
+
+    #[tokio::test]
+    async fn header_layers_development_emits_baseline_without_hsts() {
+        let response = response_for(Environment::Development).await;
+        let headers = response.headers();
+
+        assert_eq!(
+            headers.get("content-security-policy").unwrap(),
+            HeaderValue::from_static(CSP)
+        );
+        assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+        assert_eq!(
+            headers.get("referrer-policy").unwrap(),
+            "strict-origin-when-cross-origin"
+        );
+        assert!(headers.contains_key("permissions-policy"));
+        assert_eq!(headers.get("x-frame-options").unwrap(), "DENY");
+        assert!(!headers.contains_key("strict-transport-security"));
+    }
+
+    #[tokio::test]
+    async fn header_layers_production_adds_hsts() {
+        let response = response_for(Environment::Production).await;
+
+        assert_eq!(
+            response.headers().get("strict-transport-security").unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+    }
 }

@@ -1,0 +1,39 @@
+name: Rust CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Read-only by design; do not broaden without scoping permissions per job.
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Check, clippy, and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          # Keep in sync with rust-toolchain.toml.
+          toolchain: 1.97.0
+          components: clippy
+
+      - name: Cache Cargo and build outputs
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+
+      - name: Check
+        run: cargo check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build release binary
+        run: cargo build --release
