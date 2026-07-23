@@ -30,9 +30,11 @@ mod common;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use reqwest::StatusCode;
 use reqwest::header::{COOKIE, LOCATION, SET_COOKIE};
 use reqwest::redirect::Policy;
@@ -42,6 +44,9 @@ use tower_sessions_sqlx_store::SqliteStore;
 
 use common::jwt::GoogleJwtFixture;
 use common::{build_test_app, build_test_app_with_jwks_url};
+use stuffy_council::stories::{StoryGenerationError, StoryGenerationResult, StoryGenerator};
+
+use common::build_test_app_with_story_generator_and_jwks_url;
 
 /// Spin up the real app on an ephemeral port and return a `reqwest::Client`
 /// pre-configured to NOT follow redirects (so tests observe the 3xx).
@@ -108,6 +113,133 @@ async fn seed_anonymous_session(app: &common::TestApp) -> Result<String> {
     Ok(format!("stuffy_session={id}"))
 }
 
+fn session_cookie_from(response: &reqwest::Response) -> String {
+    response
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("stuffy_session="))
+        .expect("response sets session cookie")
+        .split(';')
+        .next()
+        .expect("session cookie pair")
+        .to_string()
+}
+
+async fn sign_in_allowed(
+    addr: SocketAddr,
+    client: &reqwest::Client,
+    jwt: &GoogleJwtFixture,
+) -> Result<String> {
+    let response = post_google_verify(
+        addr,
+        client,
+        &jwt.issue("test@example.com"),
+        "matching-token",
+        "matching-token",
+        None,
+    )
+    .await?;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    Ok(session_cookie_from(&response))
+}
+
+enum StubStoryFailure {
+    Unavailable,
+    Internal,
+}
+
+struct FailingStoryGenerator {
+    failure: StubStoryFailure,
+    calls: Arc<AtomicUsize>,
+}
+
+#[async_trait]
+impl StoryGenerator for FailingStoryGenerator {
+    fn model_id(&self) -> &str {
+        "failing-test-generator"
+    }
+
+    async fn generate(&self, _prompt: &str) -> StoryGenerationResult<String> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        match self.failure {
+            StubStoryFailure::Unavailable => Err(StoryGenerationError::Unavailable(
+                anyhow::anyhow!("test generator unavailable"),
+            )),
+            StubStoryFailure::Internal => Err(StoryGenerationError::Internal(anyhow::anyhow!(
+                "sensitive internal test failure"
+            ))),
+        }
+    }
+}
+
+#[tokio::test]
+async fn get_story_today_generator_unavailable_returns_friendly_200() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(FailingStoryGenerator {
+            failure: StubStoryFailure::Unavailable,
+            calls: Arc::clone(&calls),
+        }),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let session_cookie = sign_in_allowed(addr, &client, &jwt).await?;
+
+    let response = client
+        .get(format!("http://{addr}/story/today"))
+        .header(COOKIE, &session_cookie)
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.text().await?;
+    assert!(body.contains("The story elf is offline. Try again shortly."));
+    assert!(!body.contains("Ollama"));
+    assert!(!body.contains("sensitive"));
+
+    let retry = client
+        .get(format!("http://{addr}/story/today"))
+        .header(COOKIE, session_cookie)
+        .send()
+        .await?;
+    assert_eq!(retry.status(), StatusCode::OK);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        2,
+        "temporary failures must not be cached"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_story_today_internal_generator_error_returns_generic_500() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(FailingStoryGenerator {
+            failure: StubStoryFailure::Internal,
+            calls: Arc::new(AtomicUsize::new(0)),
+        }),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let session_cookie = sign_in_allowed(addr, &client, &jwt).await?;
+
+    let response = client
+        .get(format!("http://{addr}/story/today"))
+        .header(COOKIE, session_cookie)
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response.text().await?;
+    assert_eq!(body, "Something went sideways backstage. Please try again.");
+    assert!(!body.contains("sensitive internal test failure"));
+    Ok(())
+}
+
 #[tokio::test]
 async fn post_google_verify_valid_allowed_token_sets_authenticated_session() -> Result<()> {
     let jwt = GoogleJwtFixture::spawn().await;
@@ -131,17 +263,7 @@ async fn post_google_verify_valid_allowed_token_sets_authenticated_session() -> 
         1,
         "sign-in should fetch the local JWKS once"
     );
-    let session_cookie = response
-        .headers()
-        .get_all(SET_COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .find(|value| value.starts_with("stuffy_session="))
-        .expect("successful sign-in sets session cookie")
-        .split(';')
-        .next()
-        .expect("session cookie pair")
-        .to_string();
+    let session_cookie = session_cookie_from(&response);
     assert_ne!(
         session_cookie, anonymous_cookie,
         "sign-in must rotate session id"

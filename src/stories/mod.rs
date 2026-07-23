@@ -11,12 +11,13 @@ pub mod ollama;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::anyhow;
 use async_trait::async_trait;
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
-use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use time::Date;
 
 use crate::cast::{CastRegistry, Character};
@@ -32,10 +33,21 @@ pub const MAX_CAST_SIZE: usize = 4;
 pub struct GeneratedStory {
     pub title: String,
     pub body: String,
-    pub cast: Vec<String>,   // stuffy ids
+    pub cast: Vec<String>, // stuffy ids
     pub model: String,
     pub prompt: String,
 }
+
+#[derive(Debug, Error)]
+pub enum StoryGenerationError {
+    #[error("story generator temporarily unavailable")]
+    Unavailable(#[source] anyhow::Error),
+
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+pub type StoryGenerationResult<T> = std::result::Result<T, StoryGenerationError>;
 
 #[async_trait]
 pub trait StoryGenerator: Send + Sync + 'static {
@@ -43,7 +55,7 @@ pub trait StoryGenerator: Send + Sync + 'static {
     fn model_id(&self) -> &str;
 
     /// Given a fully-built prompt, return the raw model output.
-    async fn generate(&self, prompt: &str) -> Result<String>;
+    async fn generate(&self, prompt: &str) -> StoryGenerationResult<String>;
 }
 
 /// Coordinates prompt building, cast selection, and calling the underlying model.
@@ -148,22 +160,18 @@ impl StoryService {
 
     /// Generate a fresh story for the given date. Does not touch the cache;
     /// the caller (e.g. the daily-story service) decides when to persist.
-    pub async fn generate_for(&self, date: Date) -> Result<GeneratedStory> {
+    pub async fn generate_for(&self, date: Date) -> StoryGenerationResult<GeneratedStory> {
         let cast = self.pick_cast_for(date);
         if cast.len() < MIN_CAST_SIZE {
-            return Err(anyhow!(
+            return Err(StoryGenerationError::Internal(anyhow!(
                 "need at least {MIN_CAST_SIZE} stuffies to write a story (have {})",
                 cast.len()
-            ));
+            )));
         }
         let cast_ids: Vec<String> = cast.iter().map(|s| s.id.clone()).collect();
         let prompt = self.build_prompt(date, &cast);
 
-        let raw = self
-            .generator
-            .generate(&prompt)
-            .await
-            .context("model call failed")?;
+        let raw = self.generator.generate(&prompt).await?;
         let (title, body) = parse_titled_output(&raw);
 
         Ok(GeneratedStory {
@@ -300,7 +308,10 @@ TITLE: <a short evocative title, no quotes>
 fn parse_titled_output(raw: &str) -> (String, String) {
     let cleaned = raw.trim();
 
-    if let Some(rest) = cleaned.strip_prefix("TITLE:").or_else(|| cleaned.strip_prefix("Title:")) {
+    if let Some(rest) = cleaned
+        .strip_prefix("TITLE:")
+        .or_else(|| cleaned.strip_prefix("Title:"))
+    {
         // Title is the first line after `TITLE:`; body is everything after the first blank line.
         let mut parts = rest.splitn(2, '\n');
         let title = parts
@@ -341,7 +352,7 @@ mod tests {
             "unused"
         }
 
-        async fn generate(&self, _prompt: &str) -> Result<String> {
+        async fn generate(&self, _prompt: &str) -> StoryGenerationResult<String> {
             panic!("prompt composition must not invoke the generator")
         }
     }
@@ -374,9 +385,9 @@ mod tests {
             &[woofy, bar_bar, ruff_ruff],
         );
 
-        assert!(prompt.contains(
-            "Ruff Ruff is the ONLY stuffy with literal voiced English dialogue"
-        ));
+        assert!(
+            prompt.contains("Ruff Ruff is the ONLY stuffy with literal voiced English dialogue")
+        );
         assert!(prompt.contains("They NEVER speak English aloud"));
         assert!(prompt.contains("Reserve quoted English dialogue for humans and Ruff Ruff"));
         assert!(prompt.contains("FREE INDIRECT DISCOURSE"));
@@ -391,9 +402,7 @@ mod tests {
         assert!(prompt.contains(
             "Dad gives Ruff Ruff his literal voice, interprets every other stuffy's sounds"
         ));
-        assert!(prompt.contains(
-            "Makes pseudo-humming sounds aloud; never speaks English"
-        ));
+        assert!(prompt.contains("Makes pseudo-humming sounds aloud; never speaks English"));
         assert!(prompt.contains("Makes only variations of his own name aloud"));
         assert!(prompt.contains("The only stuffy with literal voiced English dialogue"));
         assert!(prompt.contains("Length: 220–350 words"));
@@ -456,11 +465,24 @@ mod tests {
             .filter(|word| !word.is_empty())
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        assert!(!normalized_words.iter().any(|word| word == "ak" || word == "aks"));
+        assert!(
+            !normalized_words
+                .iter()
+                .any(|word| word == "ak" || word == "aks")
+        );
         assert!(!prompt.to_ascii_lowercase().contains("what if we"));
         assert_eq!(lennon.catchphrase, None);
-        assert!(woofy.role.contains("never a guard, security detail, or subordinate"));
-        assert!(!ruff_ruff.loves.iter().any(|love| love.contains("wooden spoon")));
+        assert!(
+            woofy
+                .role
+                .contains("never a guard, security detail, or subordinate")
+        );
+        assert!(
+            !ruff_ruff
+                .loves
+                .iter()
+                .any(|love| love.contains("wooden spoon"))
+        );
         assert!(!prompt.contains("a permanent grievance for this character"));
         assert!(prompt.contains("Council status: NOT on the council."));
         assert!(!include_str!("../../cast/lennon.toml").contains("permanent grievance"));

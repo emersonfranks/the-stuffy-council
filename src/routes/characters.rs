@@ -10,7 +10,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use tower_sessions::Session;
 
 use crate::auth::{SESSION_USER_KEY, SessionUser};
-use crate::cast::Character;
+use crate::cast::{CastRegistry, Character};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::web::portrait::{self, CharacterPortrait};
@@ -35,6 +35,7 @@ struct CharacterTemplate<'a> {
     image_src: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct RelationshipView {
     id: String,
     name: String,
@@ -74,19 +75,7 @@ pub async fn show_character(
 
     let character = state.cast.get(&id).ok_or(AppError::NotFound)?;
 
-    let relationships = character
-        .relationships
-        .iter()
-        .map(|r| RelationshipView {
-            id: r.with.clone(),
-            name: state
-                .cast
-                .get(&r.with)
-                .map(|c| c.name.clone())
-                .unwrap_or_else(|| r.with.clone()),
-            bond: r.bond.clone(),
-        })
-        .collect();
+    let relationships = relationship_views(character, &state.cast);
     let image_candidates = load_image_candidates(FsPath::new(IMAGE_CANDIDATE_DIR), &character.id)?;
 
     let tpl = CharacterTemplate {
@@ -96,6 +85,21 @@ pub async fn show_character(
         image_src: portrait::for_character(character).image_src,
     };
     Ok(render(&tpl)?.into_response())
+}
+
+fn relationship_views(character: &Character, cast: &CastRegistry) -> Vec<RelationshipView> {
+    character
+        .relationships
+        .iter()
+        .map(|r| RelationshipView {
+            id: r.with.clone(),
+            name: cast
+                .get(&r.with)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| r.with.clone()),
+            bond: r.bond.clone(),
+        })
+        .collect()
 }
 
 async fn require_user(session: &Session) -> AppResult<Option<SessionUser>> {
@@ -201,6 +205,8 @@ mod tests {
 
     use tempfile::tempdir;
 
+    use crate::cast::Relationship;
+
     use super::*;
 
     fn touch(path: &FsPath) {
@@ -228,6 +234,51 @@ mod tests {
             relationships: Vec::new(),
             lore: None,
         }
+    }
+
+    #[test]
+    fn relationship_views_known_target_uses_display_name() {
+        let cast = CastRegistry::load_from_dir(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cast"),
+        )
+        .expect("load committed cast");
+        let mut character = build_character();
+        character.relationships = vec![Relationship {
+            with: "lennon".into(),
+            bond: "best friends".into(),
+        }];
+
+        let views = relationship_views(&character, &cast);
+
+        assert_eq!(
+            views,
+            vec![RelationshipView {
+                id: "lennon".into(),
+                name: "Lennon".into(),
+                bond: "best friends".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn relationship_views_missing_target_uses_stable_id_as_name() {
+        let cast = CastRegistry::default();
+        let mut character = build_character();
+        character.relationships = vec![Relationship {
+            with: "missing-friend".into(),
+            bond: "mysterious acquaintance".into(),
+        }];
+
+        let views = relationship_views(&character, &cast);
+
+        assert_eq!(
+            views,
+            vec![RelationshipView {
+                id: "missing-friend".into(),
+                name: "missing-friend".into(),
+                bond: "mysterious acquaintance".into(),
+            }]
+        );
     }
 
     #[test]

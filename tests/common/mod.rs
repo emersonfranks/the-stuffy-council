@@ -22,7 +22,7 @@ use stuffy_council::auth::JwkCache;
 use stuffy_council::cast::CastRegistry;
 use stuffy_council::config::{Config, Environment};
 use stuffy_council::state::AppState;
-use stuffy_council::stories::{StoryGenerator, StoryService};
+use stuffy_council::stories::{StoryGenerationResult, StoryGenerator, StoryService};
 
 /// A ready-to-serve `AppState` plus the tempdir backing its on-disk state.
 ///
@@ -34,19 +34,43 @@ pub struct TestApp {
 }
 
 pub async fn build_test_app() -> Result<TestApp> {
-    build_test_app_with_jwks_url(None).await
+    build_test_app_with_dependencies(
+        Arc::new(NoopGenerator),
+        Arc::new(CastRegistry::default()),
+        None,
+    )
+    .await
 }
 
 pub async fn build_test_app_with_jwks_url(jwks_url: Option<&str>) -> Result<TestApp> {
+    build_test_app_with_dependencies(
+        Arc::new(NoopGenerator),
+        Arc::new(CastRegistry::default()),
+        jwks_url,
+    )
+    .await
+}
+
+pub async fn build_test_app_with_story_generator_and_jwks_url(
+    generator: Arc<dyn StoryGenerator>,
+    jwks_url: Option<&str>,
+) -> Result<TestApp> {
+    let cast = Arc::new(CastRegistry::load_from_dir(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cast"),
+    )?);
+    build_test_app_with_dependencies(generator, cast, jwks_url).await
+}
+
+async fn build_test_app_with_dependencies(
+    generator: Arc<dyn StoryGenerator>,
+    cast: Arc<CastRegistry>,
+    jwks_url: Option<&str>,
+) -> Result<TestApp> {
     let tmp = tempfile::tempdir()?;
 
     let db_path = tmp.path().join("test.sqlite");
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
     let db = stuffy_council::db::connect(&db_url).await?;
-
-    // Empty cast: enough for the auth surface + council/story routes to be
-    // wired up. Individual tests that need characters can extend later.
-    let cast = Arc::new(CastRegistry::default());
 
     let allow_path = tmp.path().join("authorized-users.toml");
     std::fs::write(
@@ -58,7 +82,6 @@ pub async fn build_test_app_with_jwks_url(jwks_url: Option<&str>) -> Result<Test
         Environment::Development,
     )?);
 
-    let generator: Arc<dyn StoryGenerator> = Arc::new(NoopGenerator);
     let stories = StoryService::new(generator, cast.clone());
 
     let http = reqwest::Client::new();
@@ -105,7 +128,7 @@ impl StoryGenerator for NoopGenerator {
         "test-noop"
     }
 
-    async fn generate(&self, _prompt: &str) -> Result<String> {
+    async fn generate(&self, _prompt: &str) -> StoryGenerationResult<String> {
         Ok(String::new())
     }
 }
