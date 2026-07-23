@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.6 Sol (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -1605,5 +1605,60 @@ full 87 unit + 18 integration suite remains green.
 - why:  Comments must preserve the actual non-obvious lifecycle invariant.
 - fix:  Reworded the comment to state that dropping `FakeJwks` aborts the
   spawned server task.
+- status: Fixed
+
+## 2026-07-23 — graceful story-generator outage
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - src/stories/mod.rs
+  - src/stories/ollama.rs
+  - src/routes/home.rs
+  - src/routes/characters.rs
+  - templates/story.html
+  - tests/common/mod.rs
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added typed temporary-versus-internal story generation
+failures. Ollama connection and timeout errors render a friendly authenticated
+story page with HTTP 200 and warn-level diagnostics; HTTP, JSON, protocol, and
+other failures retain the generic non-leaking 500. Local adapter tests pin
+classification, and signed-auth full-router tests pin both HTTP outcomes and
+prove temporary failures are retried rather than cached. The previously
+deferred visual-identity F10 is now fixed: existing tests cover spotlight
+ordering and portrait fallbacks, while new tests cover relationship display
+name resolution and missing-target fallback. Touched files are rustfmt-clean;
+92 unit + 20 integration tests pass. Strict clippy retains only three findings
+in untouched modules.
+
+### Findings
+
+#### F1 — NIT | modularity | templates/story.html | paragraph markup duplicated across availability branches
+- what: Both branches rendered the same reading container and paragraph loop.
+- why:  Duplicate template markup can silently diverge when future agents edit
+  only one branch.
+- fix:  Hoisted the shared reading block and gated only Featuring/model
+  metadata on `!is_unavailable`.
+- status: Fixed
+
+#### F2 — NIT | tests | tests/router_smoke.rs | unavailable regression did not prove failure was uncached
+- what: A persisted friendly placeholder would still satisfy the initial HTTP
+  200/body assertions.
+- why:  State-transition tests must assert state that must remain unchanged.
+- fix:  Counted generator calls and repeated the request with the same
+  authenticated session; the second call must invoke generation again.
+- status: Fixed
+
+#### F3 — MINOR | tests | prior visual-identity F10 | authenticated view-model coverage deferral matured
+- what: #15 removed the auth-harness blocker, and this change touches
+  authenticated home rendering, satisfying the deferred trigger.
+- why:  Earlier overlapping findings require a fresh disposition when their
+  trigger becomes true.
+- fix:  Existing home tests cover all-cast spotlight ordering and portrait
+  fallbacks. Extracted `relationship_views` and tested known display-name
+  resolution plus missing-target stable-id fallback.
 - status: Fixed
 

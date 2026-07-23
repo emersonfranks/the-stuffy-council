@@ -18,16 +18,20 @@
 <article class="sc-card sc-card--pad-lg">
   <p class="sc-eyebrow">{{ date_display }}</p>
   <h1 class="sc-hero mt-1">{{ title }}</h1>
+  {% if !is_unavailable %}
   {% if !cast_names.is_empty() %}
   <div class="sc-featuring mt-4">
     <span class="sc-muted text-sm">Featuring</span>
     {% for name in cast_names %}<span class="sc-badge">{{ name }}</span>{% endfor %}
   </div>
   {% endif %}
+  {% endif %}
   <div class="sc-reading mt-6">
     {% for para in body_paragraphs %}<p>{{ para }}</p>{% endfor %}
   </div>
+  {% if !is_unavailable %}
   <p class="sc-muted mt-8 text-xs">Dreamed up by {{ model }}.</p>
+  {% endif %}
 </article>
 <p class="mt-5 text-center"><a href="/" class="sc-navlink">Back to today</a></p>
 {% endblock %}

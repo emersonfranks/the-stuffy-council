@@ -10,6 +10,7 @@ use crate::auth::{SESSION_USER_KEY, SessionUser};
 use crate::cast::CastRegistry;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
+use crate::stories::StoryGenerationError;
 use crate::story_repo;
 use crate::web::csrf;
 use crate::web::portrait::{self, CharacterPortrait};
@@ -30,6 +31,7 @@ struct HomeTemplate<'a> {
 struct StoryTemplate {
     csrf_token: String,
     title: String,
+    is_unavailable: bool,
     body_paragraphs: Vec<String>,
     cast_names: Vec<String>,
     date_display: String,
@@ -70,25 +72,41 @@ pub async fn today(State(state): State<AppState>, session: Session) -> AppResult
 
     let today = OffsetDateTime::now_utc().date();
 
-    // Cache-then-generate. If the model call fails (e.g. Ollama offline) we return an error.
-    let (title, body, cast_ids, model) =
-        if let Some(cached) = story_repo::get(&state.db, today).await? {
-            (cached.title, cached.body, cached.cast, cached.model)
-        } else {
-            tracing::info!(date = %today, "no cached story; generating");
-            let generated = state
-                .stories
-                .generate_for(today)
-                .await
-                .map_err(AppError::Internal)?;
-            story_repo::put(&state.db, today, &generated).await?;
-            (
-                generated.title,
-                generated.body,
-                generated.cast,
-                generated.model,
-            )
+    // Cache-then-generate. Temporary generator outages render an in-page retry
+    // state; internal failures still use the generic 500 path.
+    let (title, body, cast_ids, model) = if let Some(cached) =
+        story_repo::get(&state.db, today).await?
+    {
+        (cached.title, cached.body, cached.cast, cached.model)
+    } else {
+        tracing::info!(date = %today, "no cached story; generating");
+        let generated = match state.stories.generate_for(today).await {
+            Ok(generated) => generated,
+            Err(StoryGenerationError::Unavailable(error)) => {
+                tracing::warn!(error = ?error, date = %today, "story generator unavailable");
+                let tpl = StoryTemplate {
+                    csrf_token: csrf::token(&session).await?,
+                    title: "Today's story isn't ready yet".into(),
+                    is_unavailable: true,
+                    body_paragraphs: vec!["The story elf is offline. Try again shortly.".into()],
+                    cast_names: Vec::new(),
+                    date_display: today.to_string(),
+                    model: String::new(),
+                };
+                return Ok(render(&tpl)?.into_response());
+            }
+            Err(StoryGenerationError::Internal(error)) => {
+                return Err(AppError::Internal(error));
+            }
         };
+        story_repo::put(&state.db, today, &generated).await?;
+        (
+            generated.title,
+            generated.body,
+            generated.cast,
+            generated.model,
+        )
+    };
 
     let cast_names = cast_ids
         .iter()
@@ -104,6 +122,7 @@ pub async fn today(State(state): State<AppState>, session: Session) -> AppResult
     let tpl = StoryTemplate {
         csrf_token: csrf::token(&session).await?,
         title,
+        is_unavailable: false,
         body_paragraphs,
         cast_names,
         date_display: today.to_string(),
