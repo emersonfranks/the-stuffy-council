@@ -2,8 +2,8 @@
 //!
 //! Flow:
 //!   1. GET  /login              — page embeds Google's GIS button configured
-//!                                 with our `client_id` (public) and a
-//!                                 `data-login_uri` pointing at /auth/google/verify.
+//!      with our `client_id` (public) and a `data-login_uri` pointing at
+//!      /auth/google/verify.
 //!   2. User clicks the button; Google handles the entire sign-in UI (password,
 //!      MFA, passkey) inside a Google-controlled iframe/popup. On success,
 //!      Google's JS lib POSTs the browser to our /auth/google/verify endpoint
@@ -94,9 +94,6 @@ impl JwkCache {
         Self::with_url(http, GOOGLE_JWKS_URL.to_string())
     }
 
-    /// Construct a cache pointing at a caller-supplied JWKS URL. Only used
-    /// by tests that spin up a fake `/certs` endpoint; production callers
-    /// use `new` and get Google's real endpoint.
     fn with_url(http: reqwest::Client, jwks_url: String) -> Self {
         Self {
             keys: RwLock::new(HashMap::new()),
@@ -105,6 +102,12 @@ impl JwkCache {
             last_refresh_attempt: RwLock::new(None),
             refresh_mutex: Mutex::new(()),
         }
+    }
+
+    /// Integration-test endpoint override; production MUST use [`Self::new`].
+    #[doc(hidden)]
+    pub fn with_test_jwks_url(http: reqwest::Client, jwks_url: String) -> Self {
+        Self::with_url(http, jwks_url)
     }
 
     /// Unconditional fetch from the configured JWKS URL. Records the attempt
@@ -205,6 +208,10 @@ impl JwkCache {
     pub async fn len(&self) -> usize {
         self.keys.read().await.len()
     }
+
+    pub async fn is_empty(&self) -> bool {
+        self.keys.read().await.is_empty()
+    }
 }
 
 /// The subset of Google ID-token claims we care about.
@@ -285,13 +292,12 @@ pub async fn upsert_user(
 
     // Fetch the row to get the id; the ON CONFLICT path doesn't produce
     // one via last_insert_rowid.
-    let row: (i64, String, String) = sqlx::query_as(
-        "SELECT id, email, display_name FROM users WHERE google_sub = ?1",
-    )
-    .bind(&claims.sub)
-    .fetch_one(pool)
-    .await
-    .context("re-reading user row after upsert")?;
+    let row: (i64, String, String) =
+        sqlx::query_as("SELECT id, email, display_name FROM users WHERE google_sub = ?1")
+            .bind(&claims.sub)
+            .fetch_one(pool)
+            .await
+            .context("re-reading user row after upsert")?;
 
     Ok(SessionUser {
         id: row.0,
@@ -302,17 +308,15 @@ pub async fn upsert_user(
 }
 
 #[cfg(test)]
+// Shared with tests/common/mod.rs; update both #[path] includes if moved.
+#[path = "../tests/support/google_jwt.rs"]
+mod google_jwt;
+
+#[cfg(test)]
 mod tests {
-    // NOTE: `verify_id_token` and `upsert_user` are not covered here yet —
-    // signing a real Google-issued JWT would require either committing an
-    // Ed25519/RSA test key or wiring a jsonwebtoken encoder into the fake
-    // JWKS harness below. tests/router_smoke.rs also defers
-    // `POST /auth/google/verify` end-to-end coverage (see its doc block).
-    // The DoS-guard coverage below IS enough to catch the regression Copilot
-    // flagged on PR #1: `get_or_refresh` no longer performs an unconditional
-    // outbound fetch per unknown `kid`.
-    //
     // Coverage dimensions here (see .github/instructions/test-quality.instructions.md):
+    //   * signed-token verification — signature, claims, issuer, audience,
+    //     expiry/leeway, and verified-email policy
     //   * decision logic  — should_refresh_* (functional + state-transition)
     //   * amplification cap — flood_of_unknown_kids_produces_one_upstream_fetch
     //     (regression for the finding)
@@ -322,11 +326,6 @@ mod tests {
     //     (singleflight state-transition)
     //   * cooldown expiry — miss_after_cooldown_expiry_permits_second_attempt
     //
-    // Deferred: a positive-verification path (unknown kid on first miss, kid
-    // present after refresh) would need us to mint a valid JWK response body
-    // that matches a signing key we control. Filed as a follow-up rather
-    // than gating this fix.
-
     use super::*;
     use axum::Router;
     use axum::http::StatusCode;
@@ -334,8 +333,11 @@ mod tests {
     use axum::routing::get;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use time::OffsetDateTime;
     use tokio::net::TcpListener;
     use tokio::sync::Notify;
+
+    use super::google_jwt::{GoogleJwtFixture, GoogleTokenClaims, TEST_CLIENT_ID};
 
     #[derive(Clone)]
     enum FakeResponse {
@@ -350,8 +352,8 @@ mod tests {
         url: String,
         hits: Arc<AtomicUsize>,
         release: Arc<Notify>,
-        // Server runs in a spawned task; dropping the handle aborts it.
-        _server: tokio::task::JoinHandle<()>,
+        // Dropping FakeJwks aborts the spawned server task.
+        server: tokio::task::JoinHandle<()>,
     }
 
     impl FakeJwks {
@@ -398,7 +400,9 @@ mod tests {
                     }
                 }),
             );
-            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind fake JWKS");
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind fake JWKS");
             let addr = listener.local_addr().expect("local_addr");
             let server = tokio::spawn(async move {
                 let _ = axum::serve(listener, app).await;
@@ -407,7 +411,7 @@ mod tests {
                 url: format!("http://{addr}/certs"),
                 hits,
                 release,
-                _server: server,
+                server,
             }
         }
 
@@ -422,11 +426,121 @@ mod tests {
         }
     }
 
+    impl Drop for FakeJwks {
+        fn drop(&mut self) {
+            self.server.abort();
+        }
+    }
+
     fn cache_pointed_at(url: &str) -> JwkCache {
         JwkCache::with_url(reqwest::Client::new(), url.to_string())
     }
 
     // ---- decision-logic tests (no HTTP) --------------------------------
+
+    #[tokio::test]
+    async fn verify_id_token_with_valid_signed_token_returns_claims() {
+        let jwt = GoogleJwtFixture::spawn().await;
+        let cache = cache_pointed_at(&jwt.jwks_url);
+        assert!(cache.is_empty().await);
+
+        let claims = verify_id_token(&cache, TEST_CLIENT_ID, &jwt.issue("test@example.com"))
+            .await
+            .expect("valid token verifies");
+
+        assert_eq!(claims.sub, "subject-test@example.com");
+        assert_eq!(claims.email, "test@example.com");
+        assert!(claims.email_verified);
+        assert_eq!(claims.name.as_deref(), Some("Test User"));
+        assert!(!cache.is_empty().await);
+        assert_eq!(cache.len().await, 1);
+        assert_eq!(jwt.hit_count(), 1, "unknown kid should refresh once");
+    }
+
+    async fn verify_with_test_jwks(claims: &GoogleTokenClaims) -> Result<GoogleIdClaims> {
+        let jwt = GoogleJwtFixture::spawn().await;
+        let cache = cache_pointed_at(&jwt.jwks_url);
+        verify_id_token(&cache, TEST_CLIENT_ID, &jwt.issue_claims(claims)).await
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_with_wrong_audience_returns_verification_error() {
+        let mut claims = GoogleTokenClaims::valid("test@example.com");
+        claims.aud = "other-client-id".into();
+
+        let error = verify_with_test_jwks(&claims)
+            .await
+            .expect_err("wrong audience must fail");
+
+        assert_eq!(error.to_string(), "verifying Google ID token");
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_with_wrong_issuer_returns_verification_error() {
+        let mut claims = GoogleTokenClaims::valid("test@example.com");
+        claims.iss = "https://attacker.example".into();
+
+        let error = verify_with_test_jwks(&claims)
+            .await
+            .expect_err("wrong issuer must fail");
+
+        assert_eq!(error.to_string(), "verifying Google ID token");
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_expired_beyond_leeway_returns_verification_error() {
+        let mut claims = GoogleTokenClaims::valid("test@example.com");
+        claims.exp = (OffsetDateTime::now_utc() - time::Duration::minutes(2)).unix_timestamp();
+
+        let error = verify_with_test_jwks(&claims)
+            .await
+            .expect_err("expired token must fail");
+
+        assert_eq!(error.to_string(), "verifying Google ID token");
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_expired_within_leeway_returns_claims() {
+        let mut claims = GoogleTokenClaims::valid("test@example.com");
+        claims.exp = (OffsetDateTime::now_utc() - time::Duration::seconds(30)).unix_timestamp();
+
+        let verified = verify_with_test_jwks(&claims)
+            .await
+            .expect("clock skew within leeway verifies");
+
+        assert_eq!(verified.sub, "subject-test@example.com");
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_signed_by_wrong_key_returns_verification_error() {
+        let jwt = GoogleJwtFixture::spawn().await;
+        let cache = cache_pointed_at(&jwt.jwks_url);
+
+        let error = verify_id_token(
+            &cache,
+            TEST_CLIENT_ID,
+            &jwt.issue_with_wrong_key("test@example.com"),
+        )
+        .await
+        .expect_err("wrong signature must fail");
+
+        assert_eq!(error.to_string(), "verifying Google ID token");
+    }
+
+    #[tokio::test]
+    async fn verify_id_token_with_unverified_email_returns_named_error() {
+        let mut claims = GoogleTokenClaims::valid("test@example.com");
+        claims.email_verified = false;
+
+        let error = verify_with_test_jwks(&claims)
+            .await
+            .expect_err("unverified email must fail");
+
+        assert_eq!(
+            error.to_string(),
+            "Google reports email `test@example.com` as unverified; refusing to sign in"
+        );
+    }
 
     #[tokio::test]
     async fn should_refresh_true_when_never_attempted() {
@@ -523,7 +637,10 @@ mod tests {
         }
         for j in joins {
             let was_err = j.await.expect("task panicked");
-            assert!(was_err, "unknown kid must not verify from any concurrent task");
+            assert!(
+                was_err,
+                "unknown kid must not verify from any concurrent task"
+            );
         }
         assert_eq!(
             fake.hit_count(),
@@ -589,8 +706,7 @@ mod tests {
         }
 
         let cache_b = Arc::clone(&cache);
-        let mut task_b =
-            tokio::spawn(async move { cache_b.get_or_refresh("kid").await.is_err() });
+        let mut task_b = tokio::spawn(async move { cache_b.get_or_refresh("kid").await.is_err() });
 
         // If the mutex-first fix is missing, task B races past the singleflight
         // and completes within microseconds while task A is still gated.

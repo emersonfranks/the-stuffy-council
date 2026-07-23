@@ -73,6 +73,7 @@ time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"
 dotenvy = "0.15"
 
 [dev-dependencies]
+rsa = "0.9"
 # Scratch directories/files for the-database + allowlist wire-ups in integration tests.
 tempfile = "3"
 

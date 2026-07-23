@@ -2310,6 +2310,7 @@ dependencies = [
  "jsonwebtoken",
  "rand 0.8.7",
  "reqwest",
+ "rsa",
  "serde",
  "serde_json",
  "sqlx",

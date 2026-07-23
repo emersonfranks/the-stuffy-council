@@ -1,4 +1,4 @@
-Last reviewer: GPT-5.5 (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -1511,4 +1511,99 @@ tests pass. Strict clippy retains only six documented baseline warnings.
 ### Findings
 
 NO FINDINGS
+
+## 2026-07-23 — signed Google JWT auth harness
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 4.7 (copilot)
+- Delegated:      no
+- Files:
+  - Cargo.toml
+  - Cargo.lock
+  - src/auth.rs
+  - tests/common/mod.rs
+  - tests/support/google_jwt.rs
+  - tests/router_smoke.rs
+  - .github/agent-review-log.md
+
+Change summary: added a shared generated-RSA/JWKS fixture and deterministic
+Google-format ID-token signing. Unit tests cover valid claims, issuer,
+audience, expiry/leeway, verified email, and wrong signatures. Full-router
+tests cover successful allowlisted sign-in, session-id rotation and stale-id
+rejection, allowlist denial, Google CSRF mismatch, and wrong-key rejection.
+The alternate JWKS constructor is hidden and documented as test-only. Touched
+files are rustfmt-clean; 87 unit + 18 integration tests pass. Strict clippy
+retains only three findings in untouched modules.
+
+### Findings
+
+#### F1 — MAJOR | tests | tests/router_smoke.rs | success test did not prove session-id rotation
+- what: The initial success test began without an existing session, so deleting
+  `session.cycle_id()` would not make it fail.
+- why:  Security regression tests must assert the fixation-defense transition,
+  not only that some authenticated cookie exists.
+- fix:  Seeded an anonymous session through the same SQLite store, sent its real
+  cookie on sign-in, asserted the returned id differs, authenticated with the
+  new id, and confirmed the stale id redirects to `/login`.
+- status: Fixed
+
+#### F2 — MINOR | tests | tests/common/mod.rs | Google client id duplicated fixture constant
+- what: The AppState fixture repeated the JWT fixture audience literal.
+- why:  Duplicated test contract values can drift into misleading failures.
+- fix:  Configured AppState from `jwt::TEST_CLIENT_ID`.
+- status: Fixed
+
+#### F3 — MINOR | agent-authoring | prior visual-identity F10 trigger was satisfied
+- what: F10 deferred authenticated home spotlight and character relationship
+  rendering until #15 supplied a signed-JWT harness.
+- why:  Review policy requires a fresh disposition when a prior finding's
+  concrete trigger becomes true.
+- fix:  The harness blocker is removed, but those view-model scenarios do not
+  overlap this auth-route change.
+- status: Deferred (next change touching authenticated rendering in
+  `src/routes/home.rs` or `src/routes/characters.rs`; owner: next agent to
+  modify either path)
+
+#### F4 — NIT | agent-authoring | shared fixture path coupling was undocumented
+- what: Unit and integration test crates include the same source file through
+  separate `#[path]` attributes.
+- why:  Moving the fixture requires updating both non-obvious includes.
+- fix:  Added reciprocal one-line coupling comments at both include sites.
+- status: Fixed
+
+#### F5 — NIT | security | alternate JWKS constructor looked production-ready
+- what: The public constructor could be mistaken for an approved production
+  trust-anchor override.
+- why:  Production verification must remain pinned to Google's JWKS endpoint.
+- fix:  Marked it `#[doc(hidden)]` and documented that production MUST use
+  `JwkCache::new`.
+- status: Fixed
+
+## 2026-07-23 — PR 29 Copilot comment fixes
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - src/auth.rs
+  - tests/common/mod.rs
+  - tests/support/google_jwt.rs
+  - .github/agent-review-log.md
+
+Change summary: addressed both Copilot PR comments. Local JWKS fixture servers
+now retain their task handles and abort them on fixture drop, including the
+pre-existing unit fake. Production construction remains private and pinned to
+Google; the hidden public integration escape hatch is explicitly named
+`with_test_jwks_url`. Focused verifier and Google POST matrices pass, and the
+full 87 unit + 18 integration suite remains green.
+
+### Findings
+
+#### F1 — NIT | agent-authoring | src/auth.rs | fixture lifecycle comment repeated the old misconception
+- what: The field comment claimed dropping a Tokio `JoinHandle` aborts its
+  task, although dropping detaches it and the fixture's `Drop` calls abort.
+- why:  Comments must preserve the actual non-obvious lifecycle invariant.
+- fix:  Reworded the comment to state that dropping `FakeJwks` aborts the
+  spawned server task.
+- status: Fixed
 

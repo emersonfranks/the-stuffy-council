@@ -6,6 +6,10 @@
 //! no-op story generator). Tests bind their own ephemeral port and hand
 //! the state to [`stuffy_council::serve`].
 
+// Shared with src/auth.rs unit tests; update both #[path] includes if moved.
+#[path = "../support/google_jwt.rs"]
+pub mod jwt;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,6 +34,10 @@ pub struct TestApp {
 }
 
 pub async fn build_test_app() -> Result<TestApp> {
+    build_test_app_with_jwks_url(None).await
+}
+
+pub async fn build_test_app_with_jwks_url(jwks_url: Option<&str>) -> Result<TestApp> {
     let tmp = tempfile::tempdir()?;
 
     let db_path = tmp.path().join("test.sqlite");
@@ -53,17 +61,18 @@ pub async fn build_test_app() -> Result<TestApp> {
     let generator: Arc<dyn StoryGenerator> = Arc::new(NoopGenerator);
     let stories = StoryService::new(generator, cast.clone());
 
-    // Empty JWKS cache. Tests that exercise sign-in verification will
-    // populate it themselves; the auth-gate smoke tests do not sign in.
     let http = reqwest::Client::new();
-    let jwks = Arc::new(JwkCache::new(http));
+    let jwks = Arc::new(match jwks_url {
+        Some(url) => JwkCache::with_test_jwks_url(http, url.to_string()),
+        None => JwkCache::new(http),
+    });
 
     let config = Arc::new(Config {
         env: Environment::Development,
         bind_addr: "127.0.0.1:0".parse().unwrap(),
         public_origin: "http://localhost".to_string(),
         database_url: db_url,
-        google_client_id: "test-client-id.apps.googleusercontent.com".to_string(),
+        google_client_id: jwt::TEST_CLIENT_ID.to_string(),
         ollama_url: "http://127.0.0.1:11434".to_string(),
         ollama_model: "test-model".to_string(),
         ollama_timeout: Duration::from_secs(5),

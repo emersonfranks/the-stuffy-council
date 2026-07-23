@@ -22,26 +22,44 @@
 //!    "Rule 3: Auth flows" requirement in
 //!    [`.github/instructions/test-quality.instructions.md`](../.github/instructions/test-quality.instructions.md).
 //!
-//! Deferred until we have a signed-JWT test harness: full
-//! `POST /auth/google/verify` end-to-end coverage. Its allowlist-reject
-//! branch is currently exercised only by manual QA.
+//! 4. **Google sign-in traverses the real auth stack.** Signed local JWTs
+//!    exercise CSRF, JWKS verification, allowlist, DB upsert, session rotation,
+//!    and the resulting authenticated request without contacting Google.
 
 mod common;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use reqwest::StatusCode;
+use reqwest::header::{COOKIE, LOCATION, SET_COOKIE};
 use reqwest::redirect::Policy;
 use tokio::net::TcpListener;
+use tower_sessions::Session;
+use tower_sessions_sqlx_store::SqliteStore;
 
-use common::build_test_app;
+use common::jwt::GoogleJwtFixture;
+use common::{build_test_app, build_test_app_with_jwks_url};
 
 /// Spin up the real app on an ephemeral port and return a `reqwest::Client`
 /// pre-configured to NOT follow redirects (so tests observe the 3xx).
 async fn spawn() -> Result<(SocketAddr, reqwest::Client, common::TestApp)> {
     let app = build_test_app().await?;
+    spawn_test_app(app).await
+}
+
+async fn spawn_with_jwks_url(
+    jwks_url: &str,
+) -> Result<(SocketAddr, reqwest::Client, common::TestApp)> {
+    let app = build_test_app_with_jwks_url(Some(jwks_url)).await?;
+    spawn_test_app(app).await
+}
+
+async fn spawn_test_app(
+    app: common::TestApp,
+) -> Result<(SocketAddr, reqwest::Client, common::TestApp)> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
 
@@ -59,6 +77,171 @@ async fn spawn() -> Result<(SocketAddr, reqwest::Client, common::TestApp)> {
         .timeout(Duration::from_secs(5))
         .build()?;
     Ok((addr, client, app))
+}
+
+async fn post_google_verify(
+    addr: SocketAddr,
+    client: &reqwest::Client,
+    credential: &str,
+    cookie_token: &str,
+    form_token: &str,
+    session_cookie: Option<&str>,
+) -> Result<reqwest::Response> {
+    let cookie_header = match session_cookie {
+        Some(session_cookie) => format!("g_csrf_token={cookie_token}; {session_cookie}"),
+        None => format!("g_csrf_token={cookie_token}"),
+    };
+    Ok(client
+        .post(format!("http://{addr}/auth/google/verify"))
+        .header(COOKIE, cookie_header)
+        .form(&[("credential", credential), ("g_csrf_token", form_token)])
+        .send()
+        .await?)
+}
+
+async fn seed_anonymous_session(app: &common::TestApp) -> Result<String> {
+    let store = Arc::new(SqliteStore::new(app.state.db.clone()));
+    let session = Session::new(None, store, None);
+    session.insert("anonymous_marker", true).await?;
+    session.save().await?;
+    let id = session.id().expect("saved session has id");
+    Ok(format!("stuffy_session={id}"))
+}
+
+#[tokio::test]
+async fn post_google_verify_valid_allowed_token_sets_authenticated_session() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, app) = spawn_with_jwks_url(&jwt.jwks_url).await?;
+    let anonymous_cookie = seed_anonymous_session(&app).await?;
+
+    let response = post_google_verify(
+        addr,
+        &client,
+        &jwt.issue("test@example.com"),
+        "matching-token",
+        "matching-token",
+        Some(&anonymous_cookie),
+    )
+    .await?;
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(response.headers().get(LOCATION).unwrap(), "/");
+    assert_eq!(
+        jwt.hit_count(),
+        1,
+        "sign-in should fetch the local JWKS once"
+    );
+    let session_cookie = response
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("stuffy_session="))
+        .expect("successful sign-in sets session cookie")
+        .split(';')
+        .next()
+        .expect("session cookie pair")
+        .to_string();
+    assert_ne!(
+        session_cookie, anonymous_cookie,
+        "sign-in must rotate session id"
+    );
+
+    let authenticated = client
+        .get(format!("http://{addr}/"))
+        .header(COOKIE, session_cookie)
+        .send()
+        .await?;
+    assert_eq!(authenticated.status(), StatusCode::OK);
+
+    let stale_session = client
+        .get(format!("http://{addr}/"))
+        .header(COOKIE, anonymous_cookie)
+        .send()
+        .await?;
+    assert_eq!(stale_session.status(), StatusCode::SEE_OTHER);
+    assert_eq!(stale_session.headers().get(LOCATION).unwrap(), "/login");
+    Ok(())
+}
+
+#[tokio::test]
+async fn post_google_verify_valid_off_allowlist_token_redirects_denied() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app) = spawn_with_jwks_url(&jwt.jwks_url).await?;
+
+    let response = post_google_verify(
+        addr,
+        &client,
+        &jwt.issue("not-allowed@example.com"),
+        "matching-token",
+        "matching-token",
+        None,
+    )
+    .await?;
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        response.headers().get(LOCATION).unwrap(),
+        "/login?error=denied"
+    );
+    assert!(
+        response
+            .headers()
+            .get_all(SET_COOKIE)
+            .iter()
+            .all(|value| !value
+                .to_str()
+                .unwrap_or_default()
+                .starts_with("stuffy_session=")),
+        "denied sign-in must not create a session"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn post_google_verify_mismatched_csrf_redirects_csrf() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app) = spawn_with_jwks_url(&jwt.jwks_url).await?;
+
+    let response = post_google_verify(
+        addr,
+        &client,
+        &jwt.issue("test@example.com"),
+        "cookie-token",
+        "form-token",
+        None,
+    )
+    .await?;
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        response.headers().get(LOCATION).unwrap(),
+        "/login?error=csrf"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn post_google_verify_token_signed_by_wrong_key_redirects_google_error() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app) = spawn_with_jwks_url(&jwt.jwks_url).await?;
+
+    let response = post_google_verify(
+        addr,
+        &client,
+        &jwt.issue_with_wrong_key("test@example.com"),
+        "matching-token",
+        "matching-token",
+        None,
+    )
+    .await?;
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        response.headers().get(LOCATION).unwrap(),
+        "/login?error=google"
+    );
+    Ok(())
 }
 
 /// Regression test: without `into_make_service_with_connect_info`, this
