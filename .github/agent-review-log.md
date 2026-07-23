@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -1661,4 +1661,24 @@ in untouched modules.
   fallbacks. Extracted `relationship_views` and tested known display-name
   resolution plus missing-target stable-id fallback.
 - status: Fixed
+
+## 2026-07-23 — deterministic LF line endings
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - .gitattributes
+  - .github/agent-review-log.md
+
+Change summary: enforced LF for all text through `text=auto eol=lf`, with
+explicit Rust, TOML, HTML, Markdown, SQL, and Dockerfile rules. PNG and WOFF2
+assets remain binary. `git add --renormalize .` changed no existing content
+because every tracked text blob was already LF. Effective-attribute checks,
+repository-wide staged-blob CR scanning, and diff/binary audits pass; 92 unit
++ 20 integration tests remain green.
+
+### Findings
+
+NO FINDINGS
 
