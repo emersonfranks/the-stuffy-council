@@ -150,6 +150,19 @@ enum StubStoryFailure {
     Internal,
 }
 
+struct StubStoryGenerator;
+
+#[async_trait]
+impl StoryGenerator for StubStoryGenerator {
+    fn model_id(&self) -> &str {
+        "stub-test-generator"
+    }
+
+    async fn generate(&self, _prompt: &str) -> StoryGenerationResult<String> {
+        Ok("The Council convened.\n\nThen it adjourned for snacks.".to_string())
+    }
+}
+
 struct FailingStoryGenerator {
     failure: StubStoryFailure,
     calls: Arc<AtomicUsize>,
@@ -414,6 +427,175 @@ async fn login_links_local_css_and_drops_tailwind_cdn() -> Result<()> {
         !body.contains("cdn.tailwindcss.com"),
         "login page still references the Tailwind CDN. body: {body}"
     );
+    Ok(())
+}
+
+/// Regression for #9: the shared layout must pull no third-party script. HTMX
+/// was loaded from unpkg but never used, and its presence forced `unpkg.com`
+/// into `script-src` for every page.
+#[tokio::test]
+async fn shared_layout_loads_no_third_party_script() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+    let body = client
+        .get(format!("http://{addr}/login"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    assert!(
+        !body.contains("unpkg.com"),
+        "layout still loads a script from unpkg. body: {body}"
+    );
+    assert!(
+        !body.contains("htmx"),
+        "layout still references HTMX; drop the dependency or re-add it to script-src. body: {body}"
+    );
+    Ok(())
+}
+
+/// #9: `/login` is the ONLY route allowed to name a third-party origin, and
+/// the only one carrying `'unsafe-inline'`, because Google Identity Services
+/// requires both. Every relaxation GIS depends on is asserted — dropping any
+/// one of them breaks sign-in without breaking any other test.
+#[tokio::test]
+async fn login_response_carries_the_google_scoped_csp() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+    let resp = client.get(format!("http://{addr}/login")).send().await?;
+    let csp = resp
+        .headers()
+        .get("content-security-policy")
+        .expect("login CSP")
+        .to_str()?
+        .to_owned();
+
+    for required in [
+        "script-src 'self' https://accounts.google.com/gsi/client",
+        "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
+        "img-src 'self' data: https://*.googleusercontent.com",
+        "connect-src 'self' https://accounts.google.com/gsi/",
+        "frame-src https://accounts.google.com/gsi/",
+        "frame-ancestors 'none'",
+    ] {
+        assert!(
+            csp.contains(required),
+            "login CSP lost a GIS requirement `{required}`. got: {csp}"
+        );
+    }
+    assert!(
+        !csp.contains("unpkg.com"),
+        "login CSP still admits unpkg. got: {csp}"
+    );
+    Ok(())
+}
+
+fn assert_strict_csp(path: &str, csp: &str) {
+    assert!(
+        !csp.contains("unsafe-inline"),
+        "{path} leaked 'unsafe-inline' outside /login. got: {csp}"
+    );
+    assert!(
+        !csp.contains("accounts.google.com") && !csp.contains("googleusercontent.com"),
+        "{path} leaked a third-party origin outside /login. got: {csp}"
+    );
+    assert!(
+        csp.contains("script-src 'self';"),
+        "{path} widened script-src. got: {csp}"
+    );
+    assert!(
+        csp.contains("frame-ancestors 'none'"),
+        "{path} lost clickjacking protection. got: {csp}"
+    );
+}
+
+fn csp_of(response: &reqwest::Response, path: &str) -> Result<String> {
+    Ok(response
+        .headers()
+        .get("content-security-policy")
+        .unwrap_or_else(|| panic!("{path} sent no CSP"))
+        .to_str()?
+        .to_owned())
+}
+
+/// #9: every route other than `/login` gets the strict policy — no inline
+/// execution and no third-party origin at all.
+#[tokio::test]
+async fn anonymous_non_login_routes_carry_the_strict_base_csp() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+
+    for path in [
+        "/healthz",
+        "/",
+        "/council",
+        "/council/ruff-ruff",
+        "/story/today",
+        "/static/app.css",
+        "/no-such-route",
+    ] {
+        let resp = client.get(format!("http://{addr}{path}")).send().await?;
+        assert_strict_csp(path, &csp_of(&resp, path)?);
+    }
+
+    let logout = client.post(format!("http://{addr}/logout")).send().await?;
+    assert_strict_csp("/logout", &csp_of(&logout, "/logout")?);
+
+    // Google's cross-origin POST lands here; it redirects rather than rendering,
+    // so it needs no GIS relaxation of its own.
+    let verify =
+        post_google_verify(addr, &client, "unused", "cookie-token", "form-token", None).await?;
+    assert_strict_csp(
+        "/auth/google/verify",
+        &csp_of(&verify, "/auth/google/verify")?,
+    );
+    Ok(())
+}
+
+/// Regression for the layer ordering in `lib::serve`: the security-header
+/// layers must sit OUTSIDE the rate limiter, or responses the middleware
+/// synthesizes itself never pass through them and ship with no CSP at all.
+#[tokio::test]
+async fn rate_limited_response_still_carries_the_strict_base_csp() -> Result<()> {
+    let app = common::build_test_app_rejecting_burst_traffic().await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+
+    let mut rejected = None;
+    for _ in 0..10 {
+        let resp = client.get(format!("http://{addr}/healthz")).send().await?;
+        if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+            rejected = Some(resp);
+            break;
+        }
+    }
+    let rejected = rejected.expect("burst traffic should trip the rate limiter");
+    assert_strict_csp("429", &csp_of(&rejected, "429")?);
+    Ok(())
+}
+
+/// data must carry the strict policy, so an escape past Askama's auto-escaping
+/// still cannot execute. The anonymous variant above only ever sees redirects.
+#[tokio::test]
+async fn authenticated_rendered_pages_carry_the_strict_base_csp() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let session = sign_in_allowed(addr, &client, &jwt).await?;
+
+    for path in ["/", "/council", "/council/ruff-ruff", "/story/today"] {
+        let resp = client
+            .get(format!("http://{addr}{path}"))
+            .header(COOKIE, session.clone())
+            .send()
+            .await?;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "{path} did not render an authenticated page"
+        );
+        assert_strict_csp(path, &csp_of(&resp, path)?);
+    }
     Ok(())
 }
 

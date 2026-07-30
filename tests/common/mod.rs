@@ -38,6 +38,7 @@ pub async fn build_test_app() -> Result<TestApp> {
         Arc::new(NoopGenerator),
         Arc::new(CastRegistry::default()),
         None,
+        PERMISSIVE_RATE_LIMIT,
     )
     .await
 }
@@ -47,6 +48,19 @@ pub async fn build_test_app_with_jwks_url(jwks_url: Option<&str>) -> Result<Test
         Arc::new(NoopGenerator),
         Arc::new(CastRegistry::default()),
         jwks_url,
+        PERMISSIVE_RATE_LIMIT,
+    )
+    .await
+}
+
+/// Rate limits tight enough that a second immediate request is rejected, for
+/// tests that need to observe a middleware-synthesized 429.
+pub async fn build_test_app_rejecting_burst_traffic() -> Result<TestApp> {
+    build_test_app_with_dependencies(
+        Arc::new(NoopGenerator),
+        Arc::new(CastRegistry::default()),
+        None,
+        (1, 1),
     )
     .await
 }
@@ -58,13 +72,18 @@ pub async fn build_test_app_with_story_generator_and_jwks_url(
     let cast = Arc::new(CastRegistry::load_from_dir(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cast"),
     )?);
-    build_test_app_with_dependencies(generator, cast, jwks_url).await
+    build_test_app_with_dependencies(generator, cast, jwks_url, PERMISSIVE_RATE_LIMIT).await
 }
+
+/// Permissive limits so the rate limiter doesn't reject legitimate test
+/// traffic. `(per_second, burst)`.
+const PERMISSIVE_RATE_LIMIT: (u64, u32) = (1000, 1000);
 
 async fn build_test_app_with_dependencies(
     generator: Arc<dyn StoryGenerator>,
     cast: Arc<CastRegistry>,
     jwks_url: Option<&str>,
+    rate_limit: (u64, u32),
 ) -> Result<TestApp> {
     let tmp = tempfile::tempdir()?;
 
@@ -99,10 +118,8 @@ async fn build_test_app_with_dependencies(
         ollama_url: "http://127.0.0.1:11434".to_string(),
         ollama_model: "test-model".to_string(),
         ollama_timeout: Duration::from_secs(5),
-        // Permissive limits so the rate limiter doesn't reject legitimate
-        // test traffic. Rate-limit behavior is tested elsewhere.
-        rate_limit_per_second: 1000,
-        rate_limit_burst: 1000,
+        rate_limit_per_second: rate_limit.0,
+        rate_limit_burst: rate_limit.1,
     });
 
     Ok(TestApp {

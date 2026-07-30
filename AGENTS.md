@@ -181,9 +181,9 @@ orientation in [docs/testing/README.md](docs/testing/README.md).
 ## Non-goals (for now)
 
 * No public signup — this is a closed roster.
-* No JS build pipeline — HTMX (unpkg) + a self-hosted `static/app.css`
-  (the Tailwind Play CDN was removed; #9 may vendor the full Tailwind
-  build). Introduce a real build only when we outgrow this.
+* No JS build pipeline and no client-side JS of our own — a self-hosted
+  `static/app.css` plus Google Identity Services on `/login`. Introduce a
+  real build only when we outgrow this.
 * No public API — only server-rendered HTML routes.
 * No image generation in-process — image links point at pre-generated
   files under `/static/stuffies/` if present.

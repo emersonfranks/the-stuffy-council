@@ -1,4 +1,4 @@
-Last reviewer: Gemini 3.6 Flash (copilot)
+Last reviewer: GPT-5.6 Sol (copilot)
 
 # Agent Review Log
 
@@ -1806,3 +1806,113 @@ full 94 unit + 20 integration suite pass.
 
 NO FINDINGS
 
+
+## 2026-07-30 — scope CSP relaxations to /login (#9)
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - src/web/security.rs
+  - src/routes/auth.rs
+  - src/lib.rs
+  - templates/base.html
+  - tests/router_smoke.rs
+  - tests/common/mod.rs
+  - README.md
+  - AGENTS.md
+
+Change summary: closes the HTMX and CSP halves of #9 (the Tailwind half landed
+with the visual-identity work). HTMX was loaded from unpkg in `base.html` but
+had zero `hx-*` attributes anywhere in the repo, so it was deleted rather than
+vendored per the YAGNI default, removing `unpkg.com` from `script-src`. The
+single global policy was then split: `BASE_CSP` is same-origin-only with no
+inline execution and no third-party origin, and `LOGIN_CSP` adds only the
+source expressions Google Identity Services needs. `show_login` attaches
+`LOGIN_CSP` to its own response and the baseline layer changed from
+`overriding` to `if_not_present` so the handler's narrower choice wins. Story
+and council pages — the ones rendering model output under AGENTS.md rule 5 —
+now run with no `'unsafe-inline'` and no third-party origin at all. Three
+mutation checks confirm the new tests bite: reverting `if_not_present`,
+restoring the HTMX tag, and re-nesting the security layers each fail exactly
+one test. 98 unit + 25 integration tests pass; strict all-target clippy is
+clean; the doc gate passes; touched files are rustfmt-clean.
+
+Partial close: #9 step 4 says drop `'unsafe-inline'` outright. It survives on
+`/login` alone because the GIS button injects its own styles. Eliminating it
+entirely needs per-request nonce plumbing (dynamic CSP header, nonce in request
+extensions, template threading) and depends on GIS propagating the nonce to
+injected styles, which Google does not currently document. Tracked below as F7.
+
+### Findings
+
+#### F1 — MAJOR | tests | src/web/security.rs | CSP tests allowed wildcard and non-HTTPS sources
+- what: Assertions rejected only `https://`, `unsafe-inline`, and `unsafe-eval`,
+  so `*`, `https:`, `http://evil.example`, or a stray `data:` would have kept
+  the suite green while defeating the same-origin policy.
+- why:  Agent-authoring policy makes missing coverage in `src/web/security.rs`
+  a MAJOR finding; AGENTS.md rule 5 treats model output as untrusted.
+- fix:  Both policies are now exact-matched directive-by-directive against a
+  declared source-token set, plus a named assertion rejecting wildcard schemes
+  and plaintext origins.
+- status: Fixed
+
+#### F2 — MAJOR | tests | tests/router_smoke.rs | login test omitted three required GIS relaxations
+- what: Only `script-src` and `frame-src` were asserted, so dropping the GIS
+  `style-src`, `img-src`, or `connect-src` entries would break sign-in silently.
+- why:  Agent-authoring policy requires functional coverage and elevates missing
+  `src/web/security.rs` coverage to MAJOR.
+- fix:  The `/login` test now asserts every GIS source expression the button
+  depends on.
+- status: Fixed
+
+#### F3 — MAJOR | tests | tests/router_smoke.rs | strict-CSP test never saw a rendered protected page
+- what: Protected URLs were requested anonymously, so the test observed 303s
+  rather than the story and council pages, and `/auth/google/verify`, `/logout`,
+  and `/council/{id}` were omitted entirely. Because `if_not_present` preserves
+  handler-set headers, per-route leakage could escape detection.
+- why:  Agent-authoring policy makes missing security-module coverage MAJOR;
+  AGENTS.md rule 5 requires protection exactly where model output is displayed.
+- fix:  Split into an anonymous sweep (now including `/logout`,
+  `/auth/google/verify`, `/council/{id}`, and an unrouted path) and a new
+  authenticated test that signs in with the JWT fixture and asserts HTTP 200 on
+  `/`, `/council`, `/council/ruff-ruff`, and `/story/today` before checking CSP.
+- status: Fixed
+
+#### F4 — MINOR | security | src/lib.rs | middleware-synthesized responses bypassed the security headers
+- what: The security layers were applied inside the timeout, session, and rate
+  limiter, so a 408 or 429 short-circuit shipped with no CSP at all.
+- why:  Agent-authoring policy requires security invariants to stay
+  regression-safe and artifacts to describe the current state accurately.
+- fix:  Security layers moved outermost, with a comment pinning why, plus
+  `rate_limited_response_still_carries_the_strict_base_csp` as the guard. The
+  test harness gained `build_test_app_rejecting_burst_traffic`. Mutation-checked.
+- status: Fixed
+
+#### F5 — NIT | docs | src/web/security.rs | LOGIN_CSP doc miscounted its relaxations
+- what: "the four origins" described five relaxed directive entries across two
+  host origins.
+- why:  Agent-authoring policy requires documentation to be terse and factual.
+- fix:  Reworded to "the source expressions Google Identity Services requires".
+- status: Fixed
+
+#### F6 — NIT | agent-authoring | src/web/security.rs:1 | module preamble narrated the module
+- what: "Security headers applied to every response" restated the module's
+  purpose and was also false while F4 stood.
+- why:  Agent-authoring policy forbids preambles that restate the obvious.
+- fix:  Deleted the summary line; the preamble now opens on the BASE/LOGIN
+  invariant and records the outermost-layer requirement.
+- status: Fixed
+
+#### F7 — MINOR | security | src/web/security.rs | 'unsafe-inline' still present on /login
+- what: #9 step 4 asks for `'unsafe-inline'` to be dropped; it remains in
+  `LOGIN_CSP` because the GIS button injects its own styles.
+- why:  AGENTS.md ground rules treat CSP relaxations as deliberate decisions
+  that must be scoped and justified rather than left implicit.
+- fix:  Replace with a per-request nonce once GIS documents nonce propagation
+  to injected styles; until then the relaxation is confined to the one route
+  that renders no model output and no user-supplied values beyond allowlisted
+  error strings.
+- status: Deferred (next change touching `/login` rendering or GIS integration,
+  or GIS documenting nonce support; owner: next agent to modify
+  `src/web/security.rs` or `templates/login.html`)

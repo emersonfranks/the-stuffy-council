@@ -95,12 +95,12 @@ cargo run
 Known caveats to close before "real" production:
 
 * Styling is a self-hosted `static/app.css` (design tokens + a small
-  Tailwind-compatible utility subset). The Tailwind Play CDN was removed —
-  it was a `<script>` the CSP never allowed, so it never loaded. #9 may
-  vendor the full Tailwind build; `'unsafe-inline'` in `style-src` now
-  remains only for the GIS button's injected styles.
-* HTMX is loaded from unpkg.com. Same story — self-host and pin an SRI
-  hash, then remove `https://unpkg.com` from `script-src`.
+  Tailwind-compatible utility subset) rather than the full Tailwind build.
+* `/login` is the one route whose CSP names third-party origins and allows
+  `'unsafe-inline'` styles, both required by Google Identity Services.
+  Every other route runs a same-origin-only policy with no inline
+  execution. Any new relaxation must be scoped to a single route the same
+  way — see `src/web/security.rs`.
 
 ## Deploy
 
@@ -122,4 +122,3 @@ docker run --rm -p 8080:8080 \
   similar trait).
 * Story history browser (`/story/YYYY-MM-DD`).
 * Small admin page for editing stuffies from the browser.
-* Vendor Tailwind + HTMX; tighten CSP.
