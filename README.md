@@ -19,10 +19,10 @@ open-source LLM (Ollama) for the story text.
 * **Ollama** running locally: <https://ollama.com/download>.
   Pull a model once:
   ```bash
-  ollama pull llama3.1:8b-instruct-q4_K_M
+  ollama pull gemma4:12b
   ```
-  Alternatives worth trying: `mistral-nemo:12b-instruct`,
-  `qwen2.5:7b-instruct`.
+  Alternatives and the measurements behind the default:
+  [docs/dev-setup.md](docs/dev-setup.md#3b-pull-the-model).
 
 ## Quick start
 

@@ -44,16 +44,20 @@ struct GenerateRequest<'a> {
     model: &'a str,
     prompt: &'a str,
     stream: bool,
+    /// Thinking models otherwise spend the whole `num_predict` budget on
+    /// reasoning and return an empty story. Accepted by non-thinking models too.
+    think: bool,
     options: GenerateOptions,
 }
 
 #[derive(Serialize)]
 struct GenerateOptions {
-    /// Slightly warm — creative but not incoherent for small local models.
     temperature: f32,
-    /// Cap output length to something sensible for bedtime.
     num_predict: i32,
     top_p: f32,
+    /// Ollama caps context at 4096 regardless of what the model supports, and
+    /// this must hold `build_prompt` output plus `num_predict`.
+    num_ctx: u32,
 }
 
 impl Default for GenerateOptions {
@@ -62,6 +66,7 @@ impl Default for GenerateOptions {
             temperature: 0.8,
             num_predict: 900,
             top_p: 0.95,
+            num_ctx: 8192,
         }
     }
 }
@@ -119,6 +124,7 @@ impl StoryGenerator for OllamaGenerator {
             model: &self.model,
             prompt,
             stream: false,
+            think: false,
             options: GenerateOptions::default(),
         };
 
@@ -206,6 +212,56 @@ mod tests {
         fn drop(&mut self) {
             self.server.abort();
         }
+    }
+
+    async fn captured_request_body() -> serde_json::Value {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+        let app = Router::new().route(
+            "/api/generate",
+            post(move |body: String| {
+                let slot = slot.clone();
+                async move {
+                    if let Some(tx) = slot.lock().expect("capture slot").take() {
+                        let _ = tx.send(body);
+                    }
+                    axum::Json(serde_json::json!({
+                        "response": "TITLE: T\n\nBody.", "done": true, "done_reason": "stop"
+                    }))
+                }
+            }),
+        );
+        let fake = FakeOllama::spawn(app).await;
+        let generator = OllamaGenerator::new(&fake.base_url, "test-model", Duration::from_secs(5))
+            .expect("generator");
+
+        generator.generate("prompt").await.expect("generation");
+
+        serde_json::from_str(&rx.await.expect("captured body")).expect("request body is JSON")
+    }
+
+    #[tokio::test]
+    async fn generate_request_disables_thinking() {
+        let body = captured_request_body().await;
+
+        assert_eq!(
+            body["think"],
+            serde_json::json!(false),
+            "thinking models spend the whole num_predict budget reasoning and return no story"
+        );
+    }
+
+    #[tokio::test]
+    async fn generate_request_raises_context_window_above_the_ollama_default() {
+        let body = captured_request_body().await;
+        let num_ctx = body["options"]["num_ctx"]
+            .as_u64()
+            .expect("num_ctx must be sent");
+
+        assert!(
+            num_ctx > 4096,
+            "Ollama's 4096 default cannot hold build_prompt plus a story; got {num_ctx}"
+        );
     }
 
     #[tokio::test]
