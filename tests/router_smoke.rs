@@ -74,13 +74,25 @@ async fn spawn_test_app(
         let _ = stuffy_council::serve(state_for_server, listener).await;
     });
 
-    // Small readiness wait: axum::serve takes a few ms to accept connections.
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
     let client = reqwest::Client::builder()
         .redirect(Policy::none())
         .timeout(Duration::from_secs(5))
         .build()?;
+
+    // Poll rather than sleep a fixed interval: the listener is already bound, so
+    // connections queue while `serve` runs session-store migrations, and a loaded
+    // machine can push that past any blind wait.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        match client.get(format!("http://{addr}/healthz")).send().await {
+            Ok(response) if response.status().is_success() => break,
+            _ if tokio::time::Instant::now() >= deadline => {
+                anyhow::bail!("test app did not become ready within 10s")
+            }
+            _ => tokio::time::sleep(Duration::from_millis(10)).await,
+        }
+    }
+
     Ok((addr, client, app))
 }
 
@@ -489,14 +501,18 @@ async fn login_response_carries_the_google_scoped_csp() -> Result<()> {
 }
 
 fn assert_strict_csp(path: &str, csp: &str) {
-    assert!(
-        !csp.contains("unsafe-inline"),
-        "{path} leaked 'unsafe-inline' outside /login. got: {csp}"
-    );
-    assert!(
-        !csp.contains("accounts.google.com") && !csp.contains("googleusercontent.com"),
-        "{path} leaked a third-party origin outside /login. got: {csp}"
-    );
+    // Allowlist every source token rather than banning known-bad origins, so a
+    // newly introduced third party fails here instead of slipping through.
+    for directive in csp.split("; ") {
+        let mut tokens = directive.trim_end_matches(';').split_whitespace();
+        let name = tokens.next().unwrap_or_default();
+        for source in tokens {
+            assert!(
+                matches!(source, "'self'" | "'none'" | "data:"),
+                "{path} {name} admits non-same-origin source `{source}` outside /login. got: {csp}"
+            );
+        }
+    }
     assert!(
         csp.contains("script-src 'self';"),
         "{path} widened script-src. got: {csp}"

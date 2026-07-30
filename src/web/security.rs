@@ -1,8 +1,8 @@
-//! [`BASE_CSP`] governs every route and admits no third-party origin and no
-//! inline anything. [`LOGIN_CSP`] is the single documented relaxation, attached
-//! by `routes::auth::show_login` because Google Identity Services needs it. Any
-//! new relaxation must be scoped to one route the same way — do NOT widen
-//! [`BASE_CSP`].
+//! [`BASE_CSP`] governs every route: same-origin only apart from `data:` images
+//! and fonts, and no inline script or style execution. [`LOGIN_CSP`] is the
+//! single documented relaxation, attached by `routes::auth::show_login` because
+//! Google Identity Services needs it. Any new relaxation must be scoped to one
+//! route the same way — do NOT widen [`BASE_CSP`].
 //!
 //! `lib::serve` applies [`header_layers`] outermost, so middleware-synthesized
 //! responses (408, 429) are covered too.
