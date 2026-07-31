@@ -92,9 +92,11 @@ async fn build_test_app_with_dependencies(
     let db = stuffy_council::db::connect(&db_url).await?;
 
     let allow_path = tmp.path().join("authorized-users.toml");
+    // Two entries so tests can exercise both sides of the admin gate.
     std::fs::write(
         &allow_path,
-        "[[users]]\nemail = \"test@example.com\"\nadmin = true\n",
+        "[[users]]\nemail = \"test@example.com\"\nadmin = true\n\
+         [[users]]\nemail = \"viewer@example.com\"\nadmin = false\n",
     )?;
     let access = Arc::new(AccessList::load_from_file(
         &allow_path,

@@ -447,7 +447,34 @@ button:focus-visible,
   color: var(--brand-lavender-ink);
 }
 
-/* ---- Character spotlight strip ---- */
+/* ---- Story archive index ---- */
+.sc-archive {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sc-archive__row + .sc-archive__row { border-top: 1px solid var(--hairline); }
+.sc-archive__link {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.75rem 0.25rem;
+  text-decoration: none;
+  color: var(--ink);
+  border-radius: var(--radius);
+}
+.sc-archive__link:hover { background: var(--surface-sunken); }
+.sc-archive__date {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  flex: none;
+}
+.sc-archive__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
 .sc-spotlight {
   display: flex;
   gap: 1.25rem;
@@ -535,11 +562,9 @@ button:focus-visible,
 }
 
 /* ---- Layout utilities ----------------------------------------------------
-   Self-hosted subset of Tailwind's class names. The Tailwind Play CDN was
-   removed: it is a <script>, but the CSP `script-src` never allowed
-   cdn.tailwindcss.com, so it never actually loaded. These names/scale match
-   Tailwind so #9 can drop in the vendored framework later without touching
-   templates. */
+   Self-hosted subset of Tailwind's class names. Names and scale match Tailwind
+   so a vendored build could drop in later without touching templates; there is
+   no plan to do so, and no CDN is loaded. */
 .flex { display: flex; }
 .grid { display: grid; }
 .items-center { align-items: center; }

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Story archive — The Stuffy Council{% endblock %}
+
+{% block header %}
+<header class="sc-masthead">
+  <a href="/" class="sc-navlink">&larr; Home</a>
+  <nav class="flex items-center gap-4">
+    <a href="/council" class="sc-navlink">Meet the council</a>
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}" />
+      <button type="submit" class="sc-btn sc-btn--quiet">Sign out</button>
+    </form>
+  </nav>
+</header>
+{% endblock %}
+
+{% block content %}
+<section class="sc-card sc-card--pad-lg">
+  <p class="sc-eyebrow">The Stuffy Council</p>
+  <h1 class="sc-hero mt-1">Every story so far</h1>
+
+  {% if entries.is_empty() %}
+  <p class="sc-lede mt-4">No stories yet. The council is still warming up.</p>
+  {% else %}
+  <ul class="sc-archive mt-6">
+    {% for entry in entries %}
+    <li class="sc-archive__row">
+      <a class="sc-archive__link" href="/story/{{ entry.iso }}">
+        <span class="sc-archive__date">{{ entry.iso }}</span>
+        <span class="sc-archive__title">{{ entry.title }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

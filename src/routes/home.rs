@@ -6,9 +6,10 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use time::OffsetDateTime;
 use tower_sessions::Session;
 
-use crate::auth::{SESSION_USER_KEY, SessionUser};
 use crate::cast::CastRegistry;
 use crate::error::{AppError, AppResult};
+use crate::routes::require_user;
+use crate::routes::story_view::StoryTemplate;
 use crate::state::AppState;
 use crate::stories::StoryGenerationError;
 use crate::story_repo;
@@ -24,18 +25,6 @@ struct HomeTemplate<'a> {
     today_title: String,
     today_iso: String,
     spotlight: Vec<CharacterPortrait<'a>>,
-}
-
-#[derive(Template)]
-#[template(path = "story.html")]
-struct StoryTemplate {
-    csrf_token: String,
-    title: String,
-    is_unavailable: bool,
-    body_paragraphs: Vec<String>,
-    cast_names: Vec<String>,
-    date_display: String,
-    model: String,
 }
 
 pub async fn index(State(state): State<AppState>, session: Session) -> AppResult<Response> {
@@ -74,68 +63,46 @@ pub async fn today(State(state): State<AppState>, session: Session) -> AppResult
 
     // Cache-then-generate. Temporary generator outages render an in-page retry
     // state; internal failures still use the generic 500 path.
-    let (title, body, cast_ids, model) = if let Some(cached) =
-        story_repo::get(&state.db, today).await?
-    {
-        (cached.title, cached.body, cached.cast, cached.model)
-    } else {
-        tracing::info!(date = %today, "no cached story; generating");
-        let generated = match state.stories.generate_for(today).await {
-            Ok(generated) => generated,
-            Err(StoryGenerationError::Unavailable(error)) => {
-                tracing::warn!(error = ?error, date = %today, "story generator unavailable");
-                let tpl = StoryTemplate {
-                    csrf_token: csrf::token(&session).await?,
-                    title: "Today's story isn't ready yet".into(),
-                    is_unavailable: true,
-                    body_paragraphs: vec!["The story elf is offline. Try again shortly.".into()],
-                    cast_names: Vec::new(),
-                    date_display: today.to_string(),
-                    model: String::new(),
-                };
-                return Ok(render(&tpl)?.into_response());
-            }
-            Err(StoryGenerationError::Internal(error)) => {
-                return Err(AppError::Internal(error));
-            }
+    let (title, body, cast_ids, model) =
+        if let Some(cached) = story_repo::get(&state.db, today).await? {
+            (cached.title, cached.body, cached.cast, cached.model)
+        } else {
+            tracing::info!(date = %today, "no cached story; generating");
+            let generated = match state.stories.generate_for(today).await {
+                Ok(generated) => generated,
+                Err(StoryGenerationError::Unavailable(error)) => {
+                    tracing::warn!(error = ?error, date = %today, "story generator unavailable");
+                    let tpl = StoryTemplate::unavailable(
+                        csrf::token(&session).await?,
+                        today,
+                        "Today's story isn't ready yet",
+                        "The story elf is offline. Try again shortly.",
+                    );
+                    return Ok(render(&tpl)?.into_response());
+                }
+                Err(StoryGenerationError::Internal(error)) => {
+                    return Err(AppError::Internal(error));
+                }
+            };
+            story_repo::put(&state.db, today, &generated).await?;
+            (
+                generated.title,
+                generated.body,
+                generated.cast,
+                generated.model,
+            )
         };
-        story_repo::put(&state.db, today, &generated).await?;
-        (
-            generated.title,
-            generated.body,
-            generated.cast,
-            generated.model,
-        )
-    };
 
-    let cast_names = cast_ids
-        .iter()
-        .filter_map(|id| state.cast.get(id).map(|c| c.name.clone()))
-        .collect();
-
-    let body_paragraphs = body
-        .split("\n\n")
-        .map(|p| p.trim().to_string())
-        .filter(|p| !p.is_empty())
-        .collect();
-
-    let tpl = StoryTemplate {
-        csrf_token: csrf::token(&session).await?,
+    let tpl = StoryTemplate::from_story(
+        csrf::token(&session).await?,
+        today,
         title,
-        is_unavailable: false,
-        body_paragraphs,
-        cast_names,
-        date_display: today.to_string(),
+        &body,
+        &cast_ids,
         model,
-    };
+        &state.cast,
+    );
     Ok(render(&tpl)?.into_response())
-}
-
-async fn require_user(session: &Session) -> AppResult<Option<SessionUser>> {
-    session
-        .get::<SessionUser>(SESSION_USER_KEY)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("session get user: {e}")))
 }
 
 fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {
