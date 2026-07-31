@@ -67,11 +67,7 @@ pub async fn serve(state: AppState, listener: TcpListener) -> Result<()> {
     let rate_limit_layer = GovernorLayer::new(governor_config);
 
     let env = state.config.env;
-    let mut app = routes::router(state);
-    for layer in web::security::header_layers(env) {
-        app = app.layer(layer);
-    }
-    let app = app
+    let app = routes::router(state)
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
@@ -80,6 +76,14 @@ pub async fn serve(state: AppState, listener: TcpListener) -> Result<()> {
         .layer(session_layer)
         .layer(rate_limit_layer)
         .layer(TraceLayer::new_for_http());
+
+    // Outermost so that responses synthesized by the middleware above — 408 from
+    // the timeout layer, 429 from the rate limiter — carry the security headers
+    // too. Moving these inward silently drops CSP from every short-circuit.
+    let mut app = app;
+    for layer in web::security::header_layers(env) {
+        app = app.layer(layer);
+    }
 
     axum::serve(
         listener,

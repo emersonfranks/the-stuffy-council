@@ -1,4 +1,4 @@
-Last reviewer: Gemini 3.6 Flash (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -1806,3 +1806,207 @@ full 94 unit + 20 integration suite pass.
 
 NO FINDINGS
 
+
+## 2026-07-30 — scope CSP relaxations to /login (#9)
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot)
+- Delegated:      no
+- Files:
+  - src/web/security.rs
+  - src/routes/auth.rs
+  - src/lib.rs
+  - templates/base.html
+  - tests/router_smoke.rs
+  - tests/common/mod.rs
+  - README.md
+  - AGENTS.md
+
+Change summary: closes the HTMX and CSP halves of #9 (the Tailwind half landed
+with the visual-identity work). HTMX was loaded from unpkg in `base.html` but
+had zero `hx-*` attributes anywhere in the repo, so it was deleted rather than
+vendored per the YAGNI default, removing `unpkg.com` from `script-src`. The
+single global policy was then split: `BASE_CSP` is same-origin-only with no
+inline execution and no third-party origin, and `LOGIN_CSP` adds only the
+source expressions Google Identity Services needs. `show_login` attaches
+`LOGIN_CSP` to its own response and the baseline layer changed from
+`overriding` to `if_not_present` so the handler's narrower choice wins. Story
+and council pages — the ones rendering model output under AGENTS.md rule 5 —
+now run with no `'unsafe-inline'` and no third-party origin at all. Three
+mutation checks confirm the new tests bite: reverting `if_not_present`,
+restoring the HTMX tag, and re-nesting the security layers each fail exactly
+one test. 98 unit + 25 integration tests pass; strict all-target clippy is
+clean; the doc gate passes; touched files are rustfmt-clean.
+
+Partial close: #9 step 4 says drop `'unsafe-inline'` outright. It survives on
+`/login` alone because the GIS button injects its own styles. Eliminating it
+entirely needs per-request nonce plumbing (dynamic CSP header, nonce in request
+extensions, template threading) and depends on GIS propagating the nonce to
+injected styles, which Google does not currently document. Tracked below as F7.
+
+### Findings
+
+#### F1 — MAJOR | tests | src/web/security.rs | CSP tests allowed wildcard and non-HTTPS sources
+- what: Assertions rejected only `https://`, `unsafe-inline`, and `unsafe-eval`,
+  so `*`, `https:`, `http://evil.example`, or a stray `data:` would have kept
+  the suite green while defeating the same-origin policy.
+- why:  Agent-authoring policy makes missing coverage in `src/web/security.rs`
+  a MAJOR finding; AGENTS.md rule 5 treats model output as untrusted.
+- fix:  Both policies are now exact-matched directive-by-directive against a
+  declared source-token set, plus a named assertion rejecting wildcard schemes
+  and plaintext origins.
+- status: Fixed
+
+#### F2 — MAJOR | tests | tests/router_smoke.rs | login test omitted three required GIS relaxations
+- what: Only `script-src` and `frame-src` were asserted, so dropping the GIS
+  `style-src`, `img-src`, or `connect-src` entries would break sign-in silently.
+- why:  Agent-authoring policy requires functional coverage and elevates missing
+  `src/web/security.rs` coverage to MAJOR.
+- fix:  The `/login` test now asserts every GIS source expression the button
+  depends on.
+- status: Fixed
+
+#### F3 — MAJOR | tests | tests/router_smoke.rs | strict-CSP test never saw a rendered protected page
+- what: Protected URLs were requested anonymously, so the test observed 303s
+  rather than the story and council pages, and `/auth/google/verify`, `/logout`,
+  and `/council/{id}` were omitted entirely. Because `if_not_present` preserves
+  handler-set headers, per-route leakage could escape detection.
+- why:  Agent-authoring policy makes missing security-module coverage MAJOR;
+  AGENTS.md rule 5 requires protection exactly where model output is displayed.
+- fix:  Split into an anonymous sweep (now including `/logout`,
+  `/auth/google/verify`, `/council/{id}`, and an unrouted path) and a new
+  authenticated test that signs in with the JWT fixture and asserts HTTP 200 on
+  `/`, `/council`, `/council/ruff-ruff`, and `/story/today` before checking CSP.
+- status: Fixed
+
+#### F4 — MINOR | security | src/lib.rs | middleware-synthesized responses bypassed the security headers
+- what: The security layers were applied inside the timeout, session, and rate
+  limiter, so a 408 or 429 short-circuit shipped with no CSP at all.
+- why:  Agent-authoring policy requires security invariants to stay
+  regression-safe and artifacts to describe the current state accurately.
+- fix:  Security layers moved outermost, with a comment pinning why, plus
+  `rate_limited_response_still_carries_the_strict_base_csp` as the guard. The
+  test harness gained `build_test_app_rejecting_burst_traffic`. Mutation-checked.
+- status: Fixed
+
+#### F5 — NIT | docs | src/web/security.rs | LOGIN_CSP doc miscounted its relaxations
+- what: "the four origins" described five relaxed directive entries across two
+  host origins.
+- why:  Agent-authoring policy requires documentation to be terse and factual.
+- fix:  Reworded to "the source expressions Google Identity Services requires".
+- status: Fixed
+
+#### F6 — NIT | agent-authoring | src/web/security.rs:1 | module preamble narrated the module
+- what: "Security headers applied to every response" restated the module's
+  purpose and was also false while F4 stood.
+- why:  Agent-authoring policy forbids preambles that restate the obvious.
+- fix:  Deleted the summary line; the preamble now opens on the BASE/LOGIN
+  invariant and records the outermost-layer requirement.
+- status: Fixed
+
+#### F7 — MINOR | security | src/web/security.rs | 'unsafe-inline' still present on /login
+- what: #9 step 4 asks for `'unsafe-inline'` to be dropped; it remains in
+  `LOGIN_CSP` because the GIS button injects its own styles.
+- why:  AGENTS.md ground rules treat CSP relaxations as deliberate decisions
+  that must be scoped and justified rather than left implicit.
+- fix:  Replace with a per-request nonce once GIS documents nonce propagation
+  to injected styles; until then the relaxation is confined to the one route
+  that renders no model output and no user-supplied values beyond allowlisted
+  error strings.
+- status: Deferred (next change touching `/login` rendering or GIS integration,
+  or GIS documenting nonce support; owner: next agent to modify
+  `src/web/security.rs` or `templates/login.html`)
+
+## 2026-07-30 — Ollama context window, thinking models, default model
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: Claude Opus 4.8 (copilot)
+- Delegated:      no
+- Files:
+  - src/stories/ollama.rs
+  - src/config.rs
+  - .env.example
+  - docs/dev-setup.md
+  - README.md
+
+Change summary: empirically driven, not speculative. Running the real
+`build_prompt` output (~3.5k tokens) against three models on Ollama 0.32.5
+surfaced two defects. First, the app never sent `num_ctx`, so Ollama applied
+its 4096 default regardless of model capability (llama3.1 supports 131072);
+measured totals were 4050 / 4025 / 4096-and-truncated, leaving ~600 tokens for
+a story specified at 300-500 words. Because `into_complete_text` already
+rejects `done_reason == "length"`, breaching the ceiling fails generation
+outright, and issue #7 (more council members) grows the prompt straight into
+it. Second, modern models are thinking models: gemma4 and qwen3.5 spent the
+entire `num_predict` budget reasoning and returned an empty `response`, so the
+request now sends `think: false`, verified as accepted by non-thinking models
+too. The default model moved to `gemma4:12b` because llama3.1 does not honor
+the `TITLE:` output contract — verified end-to-end through the real generator
+that it yields the placeholder "A Council Story" with the real title stranded
+in the body — and because it violated hard prompt canon (quoted English for Bar
+Bar, the banned literal "As the OG"). 100 unit + 25 integration tests pass;
+strict clippy clean; doc gate passes. Both new tests mutation-checked.
+
+Author's correction: an earlier claim in this session that the `done_reason ==
+"length"` guard was missing was wrong; that guard and the empty-response guard
+already existed. The reviewer independently confirmed no residue of that wrong
+belief reached code, comments, or tests.
+
+### Findings
+
+#### F1 — MINOR | docs | README.md:23 | stale alternative-model list contradicted the other docs
+- what: README still recommended `mistral-nemo:12b-instruct` and
+  `qwen2.5:7b-instruct` while `.env.example` and `docs/dev-setup.md` were
+  updated to the measured pair; the default two lines above was updated but
+  the alternatives were not.
+- why:  Agent-authoring policy requires docs to be factual and non-contradictory.
+- fix:  Replaced the list with a link to the dev-setup section that carries the
+  measurements, so one place owns the comparison.
+- status: Fixed
+
+#### F2 — MINOR | tests | src/stories/ollama.rs | `3500` was an untraceable magic value
+- what: `num_ctx > 3500 + num_predict` encoded the prompt size as a bare
+  literal traceable only to prose, and would still pass if `build_prompt` grew
+  past ~7k tokens — the exact risk it claimed to guard.
+- why:  test-quality "Untraceable magic values" — expected values must trace to
+  a requirement or to test-data declared in the same file.
+- fix:  Dropped the assertion. The `> 4096` assertion pins the real invariant,
+  and the runtime `done_reason == "length"` rejection already fails loudly if
+  the prompt outgrows the window.
+- status: Fixed
+
+#### F3 — NIT | agent-authoring | src/stories/ollama.rs | `num_ctx` doc comment ran long
+- what: Five lines restating Ollama's default, prompt size, the done_reason
+  coupling, and a speculative "raise this if the cast grows" note.
+- why:  Agent-authoring policy keeps only non-obvious invariants and cross-file
+  coupling, one short line where possible.
+- fix:  Trimmed to the two load-bearing facts: Ollama caps at 4096 regardless
+  of the model, and the value must hold `build_prompt` output plus `num_predict`.
+- status: Fixed
+
+#### F4 — NIT | agent-authoring | src/stories/ollama.rs | pre-existing option comments were narration
+- what: "Slightly warm — creative but not incoherent" and "Cap output length to
+  something sensible for bedtime" restate what the field and value already say.
+- why:  Agent-authoring policy forbids narrating what the code conveys.
+- fix:  Deleted both. Reviewer marked this optional as out-of-diff-scope; taken
+  anyway because the rule is unambiguous and the struct was already being edited.
+- status: Fixed
+
+#### F5 — NIT | agent-authoring | src/stories/ollama.rs | test helper doc comment narrated rationale
+- what: `captured_request_body` carried a `///` explaining why the wire body is
+  the chosen seam.
+- why:  Agent-authoring policy bars doc comments on private items unless they
+  capture a real gotcha; Rustdoc counts as a comment.
+- fix:  Deleted; the helper name and the two test names carry it.
+- status: Fixed
+
+#### F6 — MINOR | other | PR #36 | one PR now carries two unrelated concerns
+- what: The CSP scoping change and this story-generation change ship together.
+- why:  Reviewer raised it but found no one-concern-per-PR rule in
+  agent-authoring.instructions.md or AGENTS.md to cite, so it is not a formal
+  finding against either file.
+- fix:  Combining was an explicit instruction from the repo owner. The PR title
+  and description were rewritten to describe both concerns rather than leaving
+  a title that advertises only the CSP work.
+- status: Rejected (owner-directed scope; no repo rule prohibits it, and the PR
+  metadata was corrected so nothing is misdescribed)

@@ -87,22 +87,24 @@ give the service a moment; do not launch `ollama serve` manually (see
 
 ### 3b. Pull the model
 
-The default model is `llama3.1:8b-instruct-q4_K_M` (~5 GB). It fits in
-~6 GB of VRAM or runs on CPU (slower).
+The default model is `gemma4:12b` (~8 GB). It fits in ~10 GB of VRAM or
+runs on CPU (slower).
 
 ```bash
-ollama pull llama3.1:8b-instruct-q4_K_M
+ollama pull gemma4:12b
 ```
 
-Alternatives (set `OLLAMA_MODEL` in `.env` to match): `mistral-nemo:12b-instruct`
-(better prose, ~7 GB), `qwen2.5:7b-instruct` (strong instruction following).
+Alternatives (set `OLLAMA_MODEL` in `.env` to match): `qwen3.5:9b` (faster,
+looser on the dialogue canon), `llama3.1:8b-instruct-q4_K_M` (smallest, but
+it ignores the `TITLE:` output contract so every story falls back to the
+placeholder title).
 
 **Verify:** a real generation through the exact endpoint the app uses:
 
 ```bash
 curl -s http://127.0.0.1:11434/api/generate \
   -H 'Content-Type: application/json' \
-  -d '{"model":"llama3.1:8b-instruct-q4_K_M","prompt":"Say goodnight to a stuffed animal in one sentence.","stream":false,"options":{"num_predict":40}}'
+  -d '{"model":"gemma4:12b","prompt":"Say goodnight to a stuffed animal in one sentence.","stream":false,"think":false,"options":{"num_predict":40}}'
 ```
 
 returns JSON with a non-empty `"response"`. The first call is slow while

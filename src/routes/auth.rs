@@ -17,6 +17,7 @@ use crate::auth::{self, SESSION_USER_KEY, SessionUser};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::web::csrf;
+use crate::web::security;
 
 /// Name of the double-submit CSRF cookie Google GIS sets when it POSTs the
 /// credential to our login endpoint. Same string appears in the form body.
@@ -57,7 +58,13 @@ pub async fn show_login(
         google_client_id: &state.config.google_client_id,
         login_uri,
     };
-    Ok(render(&tpl)?.into_response())
+    // Only this page may load Google Identity Services; every other route keeps
+    // the strict base policy (see `crate::web::security`).
+    Ok((
+        [(security::CSP_HEADER, security::login_csp_value())],
+        render(&tpl)?,
+    )
+        .into_response())
 }
 
 #[derive(Deserialize)]

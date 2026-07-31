@@ -94,8 +94,7 @@ impl Config {
         }
 
         let ollama_url = get("OLLAMA_URL").unwrap_or_else(|| "http://127.0.0.1:11434".into());
-        let ollama_model =
-            get("OLLAMA_MODEL").unwrap_or_else(|| "llama3.1:8b-instruct-q4_K_M".into());
+        let ollama_model = get("OLLAMA_MODEL").unwrap_or_else(|| "gemma4:12b".into());
         let ollama_timeout_secs = parse_positive_u64(
             "OLLAMA_TIMEOUT_SECS",
             get("OLLAMA_TIMEOUT_SECS").unwrap_or_else(|| "120".into()),
@@ -162,7 +161,7 @@ mod tests {
             "test-client-id.apps.googleusercontent.com"
         );
         assert_eq!(config.ollama_url, "http://127.0.0.1:11434");
-        assert_eq!(config.ollama_model, "llama3.1:8b-instruct-q4_K_M");
+        assert_eq!(config.ollama_model, "gemma4:12b");
         assert_eq!(config.ollama_timeout, Duration::from_secs(120));
         assert_eq!(config.rate_limit_per_second, 10);
         assert_eq!(config.rate_limit_burst, 20);
