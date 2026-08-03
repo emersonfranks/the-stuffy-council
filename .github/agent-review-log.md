@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: Gemini 3.6 Flash (copilot)
 
 # Agent Review Log
 
@@ -2010,3 +2010,107 @@ belief reached code, comments, or tests.
   a title that advertises only the CSP work.
 - status: Rejected (owner-directed scope; no repo rule prohibits it, and the PR
   metadata was corrected so nothing is misdescribed)
+
+## 2026-07-31 — story archive browser + admin export (#3)
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: GPT-5.5 (copilot)
+- Delegated:      no
+- Files:
+  - src/routes/mod.rs
+  - src/routes/archive.rs (new)
+  - src/routes/admin.rs (new)
+  - src/routes/story_view.rs (new)
+  - src/routes/home.rs
+  - src/routes/characters.rs
+  - src/story_repo.rs
+  - templates/archive.html (new)
+  - templates/home.html
+  - templates/story.html
+  - static/app.css
+  - tests/router_smoke.rs
+  - tests/common/mod.rs
+
+Change summary: implements #3. `GET /story` lists the archive newest-first,
+`GET /story/{date}` renders an archived story, and `GET /admin/stories.json`
+dumps every row for backup. `by_date` never generates — an uncached date is a
+404 and an unparseable one is a 400 rejected before the query layer.
+
+Three structural decisions. `archive.rs` is split from `home.rs` along a real
+semantic boundary rather than file size: home owns the landing page and the
+live generate-if-missing path, archive is read-only. `story_view.rs` holds the
+shared `StoryTemplate` because both `home::today` and `archive::by_date` render
+`templates/story.html`, and the paragraph split plus cast-name resolution would
+otherwise be copy-pasted. `require_user` was hoisted into `routes/mod.rs` and
+joined by `require_admin`: it was already duplicated verbatim in two modules and
+the two new handlers would have made four copies, against AGENTS.md ground rule
+2's singular "use the helper".
+
+The export deliberately mirrors columns verbatim, `cast_json` included, so a
+dump restores without a decoder. 110 unit + 34 integration tests pass; strict
+clippy clean; doc gate passes. Four guards mutation-checked: downgrading the
+admin gate, turning the bad-date 400 into a 404, and flipping the archive
+ordering each fail exactly the intended tests.
+
+### Findings
+
+#### F1 — MINOR | tests | src/story_repo.rs | archive query contracts had only a one-row happy path
+- what: `list_recent` could stop ordering newest-first, ignore the limit, or map
+  the wrong title, and `export_all` could drop rows or columns, without failing
+  anything. The route tests seed a single story and assert only the date link.
+- why:  test-quality requires scenarios across functional, edge/boundary,
+  negative, and state-transition dimensions for every added public function,
+  plus regression detection rather than happy-path-only assertions.
+- fix:  Added five `story_repo` tests against a real temp SQLite database via
+  `db::connect`, covering newest-first ordering, the limit boundary, the empty
+  archive, full column fidelity on export including `prompt`, and the
+  immutability of `put` on a repeated date. Ordering is mutation-checked.
+- status: Fixed
+
+#### F2 — NIT | agent-authoring | src/routes/admin.rs | export doc comment opened with narration
+- what: "Snapshot every story row as JSON." restated the function name; only the
+  following rationale about surviving a dev-database reset carried information.
+- why:  Agent-authoring policy bans preamble restating the signature; Rustdoc
+  counts as a comment.
+- fix:  Deleted the summary line, kept the rationale that stops a future agent
+  removing or narrowing the export.
+- status: Fixed
+
+## 2026-08-03 — PR 37 review-bot fixes
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: Gemini 3.6 Flash (copilot)
+- Delegated:      no
+- Files:
+  - tests/router_smoke.rs
+  - .github/instructions/agent-authoring.instructions.md
+
+Change summary: addressed both review-bot comments on PR #37.
+`spawn_with_one_archived_story` derived the expected date from the test's own
+clock, which can disagree with the server across a midnight-UTC boundary; it now
+reads the stored date back through `story_repo::list_recent`, making the expected
+value the app's own by construction. The bot suggested scraping the date out of
+rendered HTML; the database was chosen instead because it is the source of truth
+and not coupled to markup.
+
+The bot also read `Author model: Claude Opus 5 (copilot)` as violating the pool.
+That framing was incorrect — the list is titled "Reviewer pool" and authors have
+never been constrained to it (`GitHub Copilot (current session)` appears 13 times
+historically). The real defect it exposed was a stale pool: a currently available
+model could never be picked as a reviewer. Opus 5 was added and the author/
+reviewer distinction made explicit. Historical entries were not rewritten.
+
+110 unit + 34 integration tests pass; strict clippy clean; doc gate passes.
+
+### Findings
+
+#### F1 — MINOR | agent-authoring | .github/instructions/agent-authoring.instructions.md | new pool wording contradicted the delegated-authoring step
+- what: The added sentence claimed the pool "constrains REVIEWER selection only",
+  but step 1 of "Delegated authoring" requires picking the authoring model from
+  that same pool.
+- why:  Agent-authoring policy requires docs to be factual and non-contradictory,
+  and every rule to be enforceable.
+- fix:  Reworded to state the pool constrains reviewer selection and
+  delegated-author selection, and does not constrain a model authoring directly
+  in session.
+- status: Fixed

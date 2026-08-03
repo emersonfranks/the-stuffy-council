@@ -9,9 +9,9 @@ use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use tower_sessions::Session;
 
-use crate::auth::{SESSION_USER_KEY, SessionUser};
 use crate::cast::{CastRegistry, Character};
 use crate::error::{AppError, AppResult};
+use crate::routes::require_user;
 use crate::state::AppState;
 use crate::web::portrait::{self, CharacterPortrait};
 
@@ -100,13 +100,6 @@ fn relationship_views(character: &Character, cast: &CastRegistry) -> Vec<Relatio
             bond: r.bond.clone(),
         })
         .collect()
-}
-
-async fn require_user(session: &Session) -> AppResult<Option<SessionUser>> {
-    session
-        .get::<SessionUser>(SESSION_USER_KEY)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("session get user: {e}")))
 }
 
 fn render<T: Template>(tpl: &T) -> AppResult<Html<String>> {

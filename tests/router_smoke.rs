@@ -144,10 +144,19 @@ async fn sign_in_allowed(
     client: &reqwest::Client,
     jwt: &GoogleJwtFixture,
 ) -> Result<String> {
+    sign_in_as(addr, client, jwt, "test@example.com").await
+}
+
+async fn sign_in_as(
+    addr: SocketAddr,
+    client: &reqwest::Client,
+    jwt: &GoogleJwtFixture,
+    email: &str,
+) -> Result<String> {
     let response = post_google_verify(
         addr,
         client,
-        &jwt.issue("test@example.com"),
+        &jwt.issue(email),
         "matching-token",
         "matching-token",
         None,
@@ -612,6 +621,233 @@ async fn authenticated_rendered_pages_carry_the_strict_base_csp() -> Result<()> 
         );
         assert_strict_csp(path, &csp_of(&resp, path)?);
     }
+    Ok(())
+}
+
+/// Boots the app with the real cast and a stub generator, signs in, and
+/// materializes today's story so the archive has a row to serve.
+///
+/// Returns the date the app actually stored, read back from the database.
+/// Deriving it from the test's own clock would disagree with the server across
+/// a midnight-UTC boundary.
+async fn spawn_with_one_archived_story(
+    jwt: &GoogleJwtFixture,
+    email: &str,
+) -> Result<(SocketAddr, reqwest::Client, common::TestApp, String, String)> {
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, app) = spawn_test_app(app).await?;
+    let session = sign_in_as(addr, &client, jwt, email).await?;
+
+    let generated = client
+        .get(format!("http://{addr}/story/today"))
+        .header(COOKIE, session.clone())
+        .send()
+        .await?;
+    assert_eq!(generated.status(), StatusCode::OK, "seeding today's story");
+
+    let stored = stuffy_council::story_repo::list_recent(&app.state.db, 1).await?;
+    let today = stored
+        .first()
+        .expect("seeding must persist exactly one story")
+        .date
+        .to_string();
+
+    Ok((addr, client, app, session, today))
+}
+
+#[tokio::test]
+async fn get_story_archive_lists_a_generated_story_with_a_link_to_its_date() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let body = client
+        .get(format!("http://{addr}/story"))
+        .header(COOKIE, session)
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    assert!(
+        body.contains(&format!("/story/{today}")),
+        "archive should link today's story. body: {body}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_story_by_date_renders_the_archived_story() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/story/{today}"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.text().await?;
+
+    assert!(
+        body.contains("The Council convened"),
+        "archived story body should render. body: {body}"
+    );
+    Ok(())
+}
+
+/// `/story/today` is a static segment and must keep winning over the
+/// `/story/{date}` parameter, which would otherwise reject it as a bad date.
+#[tokio::test]
+async fn get_story_today_still_routes_to_the_generating_handler() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let session = sign_in_allowed(addr, &client, &jwt).await?;
+
+    let resp = client
+        .get(format!("http://{addr}/story/today"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "/story/today must not fall through to the date parameter"
+    );
+    assert!(resp.text().await?.contains("The Council convened"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_story_by_date_with_no_cached_story_returns_404() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/story/1999-01-01"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "an uncached date must 404, never generate"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_story_by_date_with_unparseable_date_returns_400() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    for bad in ["not-a-date", "2026-13-45", "2026-02-30", "%27%20OR%201%3D1"] {
+        let resp = client
+            .get(format!("http://{addr}/story/{bad}"))
+            .header(COOKIE, session.clone())
+            .send()
+            .await?;
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "`{bad}` must be rejected before reaching SQL"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_story_archive_redirects_anonymous_to_login() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+
+    for path in ["/story", "/story/2026-07-31"] {
+        let resp = client.get(format!("http://{addr}{path}")).send().await?;
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER, "{path} must be gated");
+        assert_eq!(resp.headers().get(LOCATION).unwrap(), "/login");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_admin_export_returns_every_stored_column_for_an_admin() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin/stories.json"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let rows: serde_json::Value = resp.json().await?;
+
+    let row = rows.get(0).expect("exported story row");
+    assert_eq!(row["story_date"], today);
+    // A backup missing prompt or model cannot reproduce or audit the story.
+    for column in [
+        "story_date",
+        "title",
+        "body",
+        "cast_json",
+        "model",
+        "prompt",
+        "created_at",
+    ] {
+        assert!(
+            row.get(column).is_some_and(|v| !v.is_null()),
+            "export dropped `{column}`, so the backup is not restorable: {row}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_admin_export_forbidden_for_signed_in_non_admin() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "viewer@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin/stories.json"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "a signed-in non-admin must not read the archive dump"
+    );
+    assert!(!resp.text().await?.contains("The Council convened"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_admin_export_redirects_anonymous_to_login() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin/stories.json"))
+        .send()
+        .await?;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(LOCATION).unwrap(), "/login");
     Ok(())
 }
 
