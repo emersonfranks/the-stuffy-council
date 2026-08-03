@@ -626,6 +626,10 @@ async fn authenticated_rendered_pages_carry_the_strict_base_csp() -> Result<()> 
 
 /// Boots the app with the real cast and a stub generator, signs in, and
 /// materializes today's story so the archive has a row to serve.
+///
+/// Returns the date the app actually stored, read back from the database.
+/// Deriving it from the test's own clock would disagree with the server across
+/// a midnight-UTC boundary.
 async fn spawn_with_one_archived_story(
     jwt: &GoogleJwtFixture,
     email: &str,
@@ -638,13 +642,19 @@ async fn spawn_with_one_archived_story(
     let (addr, client, app) = spawn_test_app(app).await?;
     let session = sign_in_as(addr, &client, jwt, email).await?;
 
-    let today = time::OffsetDateTime::now_utc().date().to_string();
     let generated = client
         .get(format!("http://{addr}/story/today"))
         .header(COOKIE, session.clone())
         .send()
         .await?;
     assert_eq!(generated.status(), StatusCode::OK, "seeding today's story");
+
+    let stored = stuffy_council::story_repo::list_recent(&app.state.db, 1).await?;
+    let today = stored
+        .first()
+        .expect("seeding must persist exactly one story")
+        .date
+        .to_string();
 
     Ok((addr, client, app, session, today))
 }
