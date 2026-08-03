@@ -20,6 +20,7 @@ use crate::web::portrait::{self, CharacterPortrait};
 #[template(path = "home.html")]
 struct HomeTemplate<'a> {
     display_name: String,
+    is_admin: bool,
     csrf_token: String,
     has_today: bool,
     today_title: String,
@@ -28,7 +29,7 @@ struct HomeTemplate<'a> {
 }
 
 pub async fn index(State(state): State<AppState>, session: Session) -> AppResult<Response> {
-    let Some(user) = require_user(&session).await? else {
+    let Some(user) = require_user(&state.access, &session).await? else {
         return Ok(Redirect::to("/login").into_response());
     };
 
@@ -39,6 +40,7 @@ pub async fn index(State(state): State<AppState>, session: Session) -> AppResult
 
     let tpl = HomeTemplate {
         display_name: user.display_name,
+        is_admin: user.admin,
         csrf_token: csrf::token(&session).await?,
         has_today: cached.is_some(),
         today_title: cached.as_ref().map(|c| c.title.clone()).unwrap_or_default(),
@@ -55,7 +57,7 @@ fn landing_spotlight(cast: &CastRegistry) -> Vec<CharacterPortrait<'_>> {
 }
 
 pub async fn today(State(state): State<AppState>, session: Session) -> AppResult<Response> {
-    if require_user(&session).await?.is_none() {
+    if require_user(&state.access, &session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
     }
 
@@ -213,6 +215,7 @@ mod tests {
         let character = character();
         let template = HomeTemplate {
             display_name: "Lennon".into(),
+            is_admin: false,
             csrf_token: "token".into(),
             has_today: false,
             today_title: String::new(),
@@ -234,6 +237,7 @@ mod tests {
         let character = character();
         let template = HomeTemplate {
             display_name: "Lennon".into(),
+            is_admin: false,
             csrf_token: "token".into(),
             has_today: false,
             today_title: String::new(),

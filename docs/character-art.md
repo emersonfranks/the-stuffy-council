@@ -38,6 +38,12 @@ Ruff Ruff → peach.
   portrait when `image` equals `<stable-id>.png` and that file exists under
   `static/stuffies/`; missing or noncanonical declarations use the silhouette
   fallback (`.sc-portrait__ph`).
+- **Unreviewed candidates go in `art-review/`, never under `static/`.** Name
+  them `<stable-id>--candidate-<label-slug>.png`. `static/` is mounted with
+  `ServeDir` and is NOT authenticated, so anything placed there is anonymously
+  downloadable whether or not a page links it. Candidates are served only
+  through the admin-gated `/admin/candidates/{file}` route and appear only on
+  `/admin`. Promote a winner by moving it to `static/stuffies/<stable-id>.png`.
 - **Humans get no portrait.** Human characters (`kind = "human"`) are real
   people; they keep the silhouette placeholder and carry no `image` field.
 

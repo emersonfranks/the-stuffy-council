@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Admin — The Stuffy Council{% endblock %}
+
+{% block header %}
+<header class="sc-masthead">
+  <a href="/" class="sc-navlink">&larr; Home</a>
+  <nav class="flex items-center gap-4">
+    <a href="/story" class="sc-navlink">Story archive</a>
+    <a href="/admin/stories.json" class="sc-navlink">Export archive</a>
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}" />
+      <button type="submit" class="sc-btn sc-btn--quiet">Sign out</button>
+    </form>
+  </nav>
+</header>
+{% endblock %}
+
+{% block content %}
+<p class="sc-eyebrow">Admin</p>
+<h1 class="sc-hero mt-1">What we know</h1>
+<p class="sc-lede mt-3">Read-only. Corrections go through a pull request.</p>
+
+<section class="sc-card sc-card--pad-lg mt-6" aria-labelledby="cast-heading">
+  <h2 id="cast-heading" class="sc-section-title">The cast</h2>
+  {% for character in characters %}
+  <article class="sc-admin-character">
+    <div class="sc-admin-character__head">
+      <span class="sc-portrait sc-portrait--spot">
+        {% match character.portrait %}
+          {% when Some with (src) %}<img src="{{ src }}" alt="" width="512" height="512" loading="lazy" />
+          {% when None %}<span class="sc-portrait__ph"></span>
+        {% endmatch %}
+      </span>
+      <div>
+        <h3 class="sc-dt">{{ character.name }}</h3>
+        <p class="sc-muted text-xs">{{ character.id }} &middot; {{ character.kind }}{% if character.on_council %} &middot; on the council{% endif %}</p>
+      </div>
+    </div>
+
+    <dl class="sc-admin-facts">
+      <div><dt>Species</dt><dd>{{ character.species }}</dd></div>
+      <div><dt>Title</dt><dd>{{ character.title }}</dd></div>
+      <div><dt>Role</dt><dd>{{ character.role }}</dd></div>
+      {% if !character.faction.is_empty() %}<div><dt>Faction</dt><dd>{{ character.faction }}</dd></div>{% endif %}
+      <div><dt>Speech</dt><dd>{{ character.speech_style }}</dd></div>
+      {% if !character.catchphrase.is_empty() %}<div><dt>Catchphrase</dt><dd>{{ character.catchphrase }}</dd></div>{% endif %}
+      {% if !character.traits.is_empty() %}<div><dt>Traits</dt><dd>{{ character.traits|join(", ") }}</dd></div>{% endif %}
+      {% if !character.loves.is_empty() %}<div><dt>Loves</dt><dd>{{ character.loves|join(", ") }}</dd></div>{% endif %}
+      {% if !character.fears.is_empty() %}<div><dt>Fears</dt><dd>{{ character.fears|join(", ") }}</dd></div>{% endif %}
+      {% if !character.relationships.is_empty() %}
+      <div>
+        <dt>Relationships</dt>
+        <dd>{% for bond in character.relationships %}<span class="sc-badge">{{ bond }}</span>{% endfor %}</dd>
+      </div>
+      {% endif %}
+      {% if !character.lore.is_empty() %}<div><dt>Lore</dt><dd>{{ character.lore }}</dd></div>{% endif %}
+    </dl>
+
+    {% if !character.candidates.is_empty() %}
+    <section class="mt-4" aria-label="Art candidates for {{ character.name }}">
+      <h4 class="sc-candidate-title">Art candidates awaiting review</h4>
+      <ul class="sc-candidate-grid mt-3">
+        {% for candidate in character.candidates %}
+        <li>
+          <figure class="sc-candidate">
+            <img src="{{ candidate.src }}" alt="{{ character.name }} art candidate: {{ candidate.label }}" width="1024" height="1024" loading="lazy" />
+            <figcaption>{{ candidate.label }}</figcaption>
+          </figure>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+<section class="sc-card sc-card--pad-lg mt-6" aria-labelledby="allowed-heading">
+  <h2 id="allowed-heading" class="sc-section-title">Who can sign in</h2>
+  <p class="sc-muted text-xs mt-1">From <code>authorized-users.toml</code>. Add or remove a person via pull request.</p>
+  <ul class="sc-archive mt-4">
+    {% for user in allowed %}
+    <li class="sc-archive__row">
+      <span class="sc-archive__link">
+        <span class="sc-archive__title">{{ user.email }}</span>
+        {% if user.admin %}<span class="sc-badge">admin</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="sc-card sc-card--pad-lg mt-6" aria-labelledby="logins-heading">
+  <h2 id="logins-heading" class="sc-section-title">Recent sign-ins</h2>
+  {% if logins.is_empty() %}
+  <p class="sc-lede mt-3">Nobody has signed in yet.</p>
+  {% else %}
+  <ul class="sc-archive mt-4">
+    {% for login in logins %}
+    <li class="sc-archive__row">
+      <span class="sc-archive__link">
+        <span class="sc-archive__date">{{ login.last_login_at }}</span>
+        <span class="sc-archive__title">{{ login.display_name }}</span>
+        <span class="sc-muted text-xs">{{ login.email }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

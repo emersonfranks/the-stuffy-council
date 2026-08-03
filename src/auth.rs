@@ -58,8 +58,10 @@ pub struct SessionUser {
     pub email: String,
     pub display_name: String,
     /// True when the signed-in user has `admin = true` in
-    /// `authorized-users.toml`. Persisted on the session, not the DB row —
-    /// the source of truth is the committed file, checked at each sign-in.
+    /// `authorized-users.toml`. The value stored on the session is only a
+    /// snapshot from sign-in; `routes::require_user` re-derives it from the
+    /// current allowlist on every request, so never trust this field as read
+    /// straight out of the session.
     #[serde(default)]
     pub admin: bool,
 }

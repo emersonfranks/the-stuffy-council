@@ -14,6 +14,7 @@ pub mod routes;
 pub mod state;
 pub mod stories;
 pub mod story_repo;
+pub mod user_repo;
 pub mod web;
 
 use std::sync::Arc;

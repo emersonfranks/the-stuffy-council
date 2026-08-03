@@ -36,7 +36,7 @@ struct ArchiveEntry {
 }
 
 pub async fn list(State(state): State<AppState>, session: Session) -> AppResult<Response> {
-    if require_user(&session).await?.is_none() {
+    if require_user(&state.access, &session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
     }
 
@@ -61,7 +61,7 @@ pub async fn by_date(
     session: Session,
     Path(date): Path<String>,
 ) -> AppResult<Response> {
-    if require_user(&session).await?.is_none() {
+    if require_user(&state.access, &session).await?.is_none() {
         return Ok(Redirect::to("/login").into_response());
     }
 
