@@ -5,6 +5,7 @@
 <header class="sc-masthead">
   <a href="/" class="sc-wordmark"><img src="/static/img/favicon.svg" alt="" /> The Stuffy Council</a>
   <nav class="flex items-center gap-4">
+    {% if is_admin %}<a href="/admin" class="sc-navlink">Admin</a>{% endif %}
     <a href="/story" class="sc-navlink">Story archive</a>
     <a href="/council" class="sc-navlink">Meet the council</a>
     <form method="post" action="/logout">

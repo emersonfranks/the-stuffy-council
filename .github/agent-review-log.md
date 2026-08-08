@@ -1,4 +1,4 @@
-Last reviewer: Gemini 3.6 Flash (copilot)
+Last reviewer: Claude Opus 4.8 (copilot)
 
 # Agent Review Log
 
@@ -2113,4 +2113,142 @@ reviewer distinction made explicit. Historical entries were not rewritten.
 - fix:  Reworded to state the pool constrains reviewer selection and
   delegated-author selection, and does not constrain a model authoring directly
   in session.
+- status: Fixed
+
+## 2026-08-03 — read-only admin dashboard (#4, first slice)
+
+- Author model:   Claude Opus 5 (copilot)
+- Reviewer model: GPT-5.6 Sol (copilot), then Claude Opus 4.8 (copilot) after BLOCK fix
+- Delegated:      no
+- Files:
+  - src/routes/admin.rs
+  - src/routes/mod.rs
+  - src/routes/home.rs
+  - src/routes/archive.rs
+  - src/routes/characters.rs
+  - src/web/candidates.rs (new)
+  - src/web/mod.rs
+  - src/user_repo.rs (new)
+  - src/access.rs
+  - src/auth.rs
+  - src/lib.rs
+  - templates/admin.html (new)
+  - templates/character.html
+  - templates/home.html
+  - static/app.css
+  - docs/character-art.md
+  - tests/router_smoke.rs
+
+Change summary: first slice of #4, scoped read-only by owner direction. `GET
+/admin` is one admin-gated page showing cast base facts, the allowlist, and
+recent sign-ins from `users.last_login_at` (already populated by
+`auth::upsert_user`, so no migration). Unreviewed character art no longer
+appears on `/council/{id}`; discovery moved to `web::candidates` and is served
+only through the gated `/admin/candidates/{file}`. The eventual
+file-an-issue-on-GitHub flow is deferred to its own issue because it needs a
+credential-model decision.
+
+125 unit + 43 integration tests pass; strict clippy clean; doc gate passes.
+Four guards mutation-checked: the `/admin` gate, allowlist revocation, the
+admin-affordance refresh, and the archive ordering.
+
+### Findings
+
+#### F1 — BLOCK | security | src/routes/mod.rs | candidate art stayed anonymously downloadable
+- what: Removing the gallery from `templates/character.html` only hid
+  discovery. `static/` is mounted with `ServeDir` and is NOT authenticated, so
+  `static/stuffies/review/*.png` remained fetchable by direct URL by anyone.
+  The integration test asserting the public page does not link them was
+  vacuous about access control.
+- why:  AGENTS.md ground rule 2 requires protected resources to pass the shared
+  authentication gate; the review protocol classes security holes as BLOCK.
+- fix:  Moved the review directory to `art-review/`, outside the served tree,
+  and added the admin-gated `/admin/candidates/{file}` route.
+  `candidates::candidate_path` resolves names only when they match
+  `<slug>--candidate-<slug>.png`, which admits no separators or extra dots and
+  so rejects traversal; the follow-up reviewer confirmed this holds on Windows
+  and Unix. A unit test now asserts the constant never moves back under
+  `static/`.
+- status: Fixed
+
+#### F2 — MAJOR | security | src/routes/mod.rs | allowlist revocation did not take effect for 30 days
+- what: `require_user`/`require_admin` trusted the `admin` flag copied onto the
+  session, which lives 30 days, so removing or demoting someone in
+  `authorized-users.toml` left their existing session fully privileged.
+- why:  AGENTS.md names the committed allowlist as the sign-in authority, and
+  ground rule 2 requires the shared gate to enforce it.
+- fix:  Both helpers take `&AccessList` and re-derive authorization from the
+  current file on every request; all 8 call sites updated. NOTE: after applying
+  this fix, mutating it back left the whole suite green — the fix had no
+  coverage. Two tests now re-serve the same session against a changed allowlist
+  and fail under that mutation.
+- status: Fixed
+
+#### F3 — MAJOR | tests | src/access.rs | `entries()` shipped without contract coverage
+- what: Only the dashboard test touched it, proving two emails appear; nothing
+  covered normalization, ordering, admin flags, or the empty boundary.
+- why:  Agent-authoring policy elevates missing coverage on `src/access.rs` to
+  MAJOR.
+- fix:  Added direct unit tests for normalized ascending entries with flags and
+  for the empty list.
+- status: Fixed
+
+#### F4 — MINOR | correctness | src/routes/home.rs | admin link still trusted the stale session flag
+- what: The revocation fix was applied at the gate but not at the affordance,
+  so a demoted admin kept seeing the `/admin` link (which correctly 403s).
+- why:  Inconsistent with the invariant the fix established, and with
+  `SessionUser.admin`'s own doc.
+- fix:  `require_user` now refreshes `admin` from the live allowlist onto the
+  returned user, so callers branching on it agree with the gate. Corrected the
+  `SessionUser.admin` doc, which claimed the value is only checked at sign-in.
+- status: Fixed
+
+#### F5 — MINOR | tests | tests/router_smoke.rs | static-mount test was vacuous
+- what: It asserted `/static/stuffies/review/...` does not return 200, but no
+  such file exists in the fixture, so absence satisfied it — the same defect
+  the BLOCK called out.
+- why:  test-quality "No false positives" / "Regression detection".
+- fix:  Deleted it. The real guards are structural (the constant assertion),
+  the `candidate_path` traversal unit tests, and the gated-route integration
+  test.
+- status: Fixed
+
+#### F6 — MINOR | tests | src/routes/admin.rs | template fixture used a src no code emits
+- what: The admin template test fed `/static/stuffies/review/...`, which
+  `load_image_candidates` no longer produces, implying candidates are still
+  served from `static/`.
+- why:  test-quality "Untraceable magic values".
+- fix:  Fixture uses `/admin/candidates/...` and additionally asserts the
+  static path is absent.
+- status: Fixed
+
+#### F7 — MINOR | tests | tests/router_smoke.rs | dashboard test did not prove logins came from the database
+- what: `test@example.com` also appears in the allowlist section, and the
+  heading is static markup, so an empty login list would still pass.
+- why:  test-quality assertion-robustness.
+- fix:  Asserts the JWT fixture's display name, which can only reach the page
+  via the `users` table, and that the empty state is absent.
+- status: Fixed
+
+#### F8 — MINOR | tests | tests/router_smoke.rs | forbidden path did not prove auth precedes dependency reads
+- what: Healthy dependencies meant the test passed even if the admin check ran
+  after the database read.
+- why:  test-quality negative/error-path coverage.
+- fix:  Drops the `users` table, then asserts `/admin` still returns exactly
+  403 rather than 500.
+- status: Fixed
+
+#### F9 — NIT | tests | tests/router_smoke.rs | re-serve helper could not fail loudly
+- what: Its readiness loop gave up silently after ~1s, and a comment implied
+  `AccessList::load_from_file` was lazy when it reads eagerly.
+- why:  test-style integration scaffolding; comments must not mislead.
+- fix:  Adopted the deadline-with-bail pattern used by `spawn_test_app` and
+  corrected the comment.
+- status: Fixed
+
+#### F10 — NIT | agent-authoring | src/routes/admin.rs | private struct doc narrated the type
+- what: `CharacterFacts` carried a rustdoc restating that it projects character
+  facts.
+- why:  Agent-authoring bars doc comments on private items without a gotcha.
+- fix:  Deleted.
 - status: Fixed

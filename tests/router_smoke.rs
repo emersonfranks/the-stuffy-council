@@ -851,6 +851,320 @@ async fn get_admin_export_redirects_anonymous_to_login() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn get_admin_dashboard_shows_cast_allowlist_and_logins_for_an_admin() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.text().await?;
+
+    assert!(
+        body.contains("Ruff Ruff"),
+        "cast facts missing. body: {body}"
+    );
+    assert!(
+        body.contains("test@example.com"),
+        "allowlist missing. body: {body}"
+    );
+    assert!(
+        body.contains("viewer@example.com"),
+        "allowlist should show non-admins too. body: {body}"
+    );
+    // `Test User` is the display name minted by the JWT fixture and stored in
+    // `users` on sign-in, so it can only appear here via the database read.
+    assert!(
+        body.contains("Test User"),
+        "recent sign-ins must come from the users table. body: {body}"
+    );
+    assert!(
+        !body.contains("Nobody has signed in yet"),
+        "sign-in section rendered its empty state despite a stored login. body: {body}"
+    );
+    Ok(())
+}
+
+/// Authorization must run before the dashboard touches its dependencies. With
+/// `users` dropped, a non-admin must still get exactly 403 — a 500 would prove
+/// the database read happened first.
+#[tokio::test]
+async fn get_admin_dashboard_rejects_non_admin_before_reading_dependencies() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "viewer@example.com").await?;
+
+    sqlx::query("DROP TABLE users")
+        .execute(&app.state.db)
+        .await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "the admin check must precede every dependency read"
+    );
+    Ok(())
+}
+
+/// Sessions last 30 days, so authorization must be re-derived from the current
+/// allowlist on every request rather than trusted from the session copy.
+/// Re-serves the SAME session (the store is the shared database) against an
+/// app whose allowlist has changed.
+async fn reserve_with_allowlist(
+    app: &common::TestApp,
+    allowlist: &str,
+) -> Result<(SocketAddr, reqwest::Client)> {
+    // `load_from_file` reads eagerly, so the tempdir only has to outlive it.
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("authorized-users.toml");
+    std::fs::write(&path, allowlist)?;
+
+    let mut state = app.state.clone();
+    state.access = Arc::new(stuffy_council::access::AccessList::load_from_file(
+        &path,
+        stuffy_council::config::Environment::Development,
+    )?);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    tokio::spawn(async move {
+        let _ = stuffy_council::serve(state, listener).await;
+    });
+    let client = reqwest::Client::builder()
+        .redirect(Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()?;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        match client.get(format!("http://{addr}/healthz")).send().await {
+            Ok(response) if response.status().is_success() => break,
+            _ if tokio::time::Instant::now() >= deadline => {
+                anyhow::bail!("re-served app did not become ready within 10s")
+            }
+            _ => tokio::time::sleep(Duration::from_millis(10)).await,
+        }
+    }
+    Ok((addr, client))
+}
+
+#[tokio::test]
+async fn demoting_an_admin_revokes_the_dashboard_for_the_existing_session() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (_addr, _client, app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let (addr, client) = reserve_with_allowlist(
+        &app,
+        "[[users]]\nemail = \"test@example.com\"\nadmin = false\n",
+    )
+    .await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin"))
+        .header(COOKIE, session.clone())
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "a demoted admin must lose the dashboard immediately, not in 30 days"
+    );
+
+    let home = client
+        .get(format!("http://{addr}/"))
+        .header(COOKIE, session)
+        .send()
+        .await?
+        .text()
+        .await?;
+    assert!(
+        !home.contains("href=\"/admin\""),
+        "a demoted admin must stop seeing the admin link too. body: {home}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn removing_a_user_revokes_protected_pages_for_the_existing_session() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (_addr, _client, app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "test@example.com").await?;
+
+    let (addr, client) = reserve_with_allowlist(
+        &app,
+        "[[users]]\nemail = \"someone-else@example.com\"\nadmin = false\n",
+    )
+    .await?;
+
+    for path in ["/", "/council", "/story"] {
+        let resp = client
+            .get(format!("http://{addr}{path}"))
+            .header(COOKIE, session.clone())
+            .send()
+            .await?;
+        assert_eq!(
+            resp.status(),
+            StatusCode::SEE_OTHER,
+            "{path} must stop serving a user removed from the allowlist"
+        );
+        assert_eq!(resp.headers().get(LOCATION).unwrap(), "/login");
+    }
+    Ok(())
+}
+
+/// Candidate art is not under the `/static` mount, which is unauthenticated.
+#[tokio::test]
+async fn candidate_art_route_is_admin_gated() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let path = "/admin/candidates/ruff-ruff--candidate-clean.png";
+
+    let anonymous = client.get(format!("http://{addr}{path}")).send().await?;
+    assert_eq!(
+        anonymous.status(),
+        StatusCode::SEE_OTHER,
+        "anonymous callers must not reach candidate art"
+    );
+
+    let viewer = sign_in_as(addr, &client, &jwt, "viewer@example.com").await?;
+    let non_admin = client
+        .get(format!("http://{addr}{path}"))
+        .header(COOKIE, viewer)
+        .send()
+        .await?;
+    assert_eq!(
+        non_admin.status(),
+        StatusCode::FORBIDDEN,
+        "signed-in non-admins must not reach candidate art"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_admin_dashboard_forbidden_for_signed_in_non_admin() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let (addr, client, _app, session, _today) =
+        spawn_with_one_archived_story(&jwt, "viewer@example.com").await?;
+
+    let resp = client
+        .get(format!("http://{addr}/admin"))
+        .header(COOKIE, session)
+        .send()
+        .await?;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "a signed-in non-admin must not read the admin dashboard"
+    );
+    let body = resp.text().await?;
+    assert!(
+        !body.contains("viewer@example.com") && !body.contains("Recent sign-ins"),
+        "forbidden response leaked admin content: {body}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_admin_dashboard_redirects_anonymous_to_login() -> Result<()> {
+    let (addr, client, _app) = spawn().await?;
+
+    let resp = client.get(format!("http://{addr}/admin")).send().await?;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(LOCATION).unwrap(), "/login");
+    Ok(())
+}
+
+/// Candidate art is unapproved. It moved to the admin dashboard, so the public
+/// character page must not link the review directory for any character.
+#[tokio::test]
+async fn public_character_pages_never_link_candidate_art() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+    let session = sign_in_as(addr, &client, &jwt, "viewer@example.com").await?;
+
+    for path in ["/council", "/council/ruff-ruff", "/council/woofy"] {
+        let body = client
+            .get(format!("http://{addr}{path}"))
+            .header(COOKIE, session.clone())
+            .send()
+            .await?
+            .text()
+            .await?;
+        assert!(
+            !body.contains("/static/stuffies/review/"),
+            "{path} surfaced unapproved candidate art. body: {body}"
+        );
+        assert!(
+            !body.contains("art-candidates-heading"),
+            "{path} still renders the candidate gallery. body: {body}"
+        );
+    }
+    Ok(())
+}
+
+/// The admin entry point is a capability hint; non-admins should not see it.
+#[tokio::test]
+async fn home_shows_the_admin_link_only_to_admins() -> Result<()> {
+    let jwt = GoogleJwtFixture::spawn().await;
+    let app = build_test_app_with_story_generator_and_jwks_url(
+        Arc::new(StubStoryGenerator),
+        Some(&jwt.jwks_url),
+    )
+    .await?;
+    let (addr, client, _app) = spawn_test_app(app).await?;
+
+    let admin = sign_in_as(addr, &client, &jwt, "test@example.com").await?;
+    let admin_body = client
+        .get(format!("http://{addr}/"))
+        .header(COOKIE, admin)
+        .send()
+        .await?
+        .text()
+        .await?;
+    assert!(
+        admin_body.contains("href=\"/admin\""),
+        "admin should see the admin link. body: {admin_body}"
+    );
+
+    let viewer = sign_in_as(addr, &client, &jwt, "viewer@example.com").await?;
+    let viewer_body = client
+        .get(format!("http://{addr}/"))
+        .header(COOKIE, viewer)
+        .send()
+        .await?
+        .text()
+        .await?;
+    assert!(
+        !viewer_body.contains("href=\"/admin\""),
+        "non-admin should not see the admin link. body: {viewer_body}"
+    );
+    Ok(())
+}
+
 /// Regression: the `/static` mount actually serves our stylesheet through the
 /// full middleware stack (it was never mounted before the visual-identity work).
 #[tokio::test]

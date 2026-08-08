@@ -447,8 +447,43 @@ button:focus-visible,
   color: var(--brand-lavender-ink);
 }
 
+/* ---- Admin dashboard ---- */
+.sc-section-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+.sc-admin-character {
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--hairline);
+}
+.sc-admin-character:first-of-type { border-top: 0; }
+.sc-admin-character__head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.sc-admin-facts {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+}
+.sc-admin-facts dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.sc-admin-facts dd {
+  margin: 0.1rem 0 0;
+  color: var(--ink);
+}
+
 /* ---- Story archive index ---- */
 .sc-archive {
+
   list-style: none;
   margin: 0;
   padding: 0;

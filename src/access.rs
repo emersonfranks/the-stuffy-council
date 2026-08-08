@@ -70,6 +70,13 @@ impl AccessList {
         self.by_email.get(&email.trim().to_ascii_lowercase())
     }
 
+    /// Normalized email plus flags, ascending by email (`BTreeMap` order).
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &AuthorizedUser)> {
+        self.by_email
+            .iter()
+            .map(|(email, user)| (email.as_str(), user))
+    }
+
     pub fn len(&self) -> usize {
         self.by_email.len()
     }
@@ -95,6 +102,36 @@ mod tests {
         let path = tmp.path().join("authorized-users.toml");
         std::fs::write(&path, contents).expect("write test file");
         (tmp, path)
+    }
+
+    #[test]
+    fn entries_are_normalized_sorted_and_carry_admin_flags() {
+        let (_tmp, path) = write_allow_file(
+            "[[users]]\nemail = \"  Zoe@Example.COM \"\nadmin = false\n\
+             [[users]]\nemail = \"Alice@Example.com\"\nadmin = true\n",
+        );
+        let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
+
+        let entries: Vec<_> = list
+            .entries()
+            .map(|(email, user)| (email.to_string(), user.admin))
+            .collect();
+
+        assert_eq!(
+            entries,
+            vec![
+                ("alice@example.com".to_string(), true),
+                ("zoe@example.com".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn entries_of_an_empty_development_list_is_empty() {
+        let (_tmp, path) = write_allow_file("");
+        let list = AccessList::load_from_file(&path, Environment::Development).unwrap();
+
+        assert_eq!(list.entries().count(), 0);
     }
 
     #[test]
