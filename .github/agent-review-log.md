@@ -1,4 +1,4 @@
-Last reviewer: Claude Opus 4.8 (copilot)
+Last reviewer: GPT-5.5 (copilot)
 
 # Agent Review Log
 
@@ -2252,3 +2252,122 @@ admin-affordance refresh, and the archive ordering.
 - why:  Agent-authoring bars doc comments on private items without a gotcha.
 - fix:  Deleted.
 - status: Fixed
+
+## 2026-08-25 — local image generation runbook
+
+- Author model:   GitHub Copilot (current session)
+- Reviewer model: Claude Opus 5 → GPT-5.6 Sol → Claude Opus 4.8 → GPT-5.5
+  (copilot; two BLOCK-triggered follow-ups and post-rebase review; final review
+  NO FINDINGS)
+- Delegated:      no
+- Files:
+  - docs/image-generation-setup.md (new)
+
+Change summary: added an exact Windows/NVIDIA setup for local reference-image
+editing with pinned ComfyUI `v0.33.1` and native FLUX.1 Kontext Dev FP8. The
+runbook verifies source and model hashes before use, disables custom and API
+nodes, binds only to loopback, reserves VRAM for other workloads, carries the
+full art-bible prompt contract, and stops at candidate generation.
+
+### Findings
+
+#### F1 — BLOCK | correctness | docs/image-generation-setup.md | reviewer claimed the original ComfyUI tag did not exist
+- what: The first reviewer said `v0.9.2` was absent and the clone would fail.
+- why:  Agent-authoring documentation must be factual and executable.
+- fix:  `git ls-remote` proved the tag and recorded commit existed. The pin was
+  independently updated to current stable `v0.33.1` at immutable release commit
+  `72865f4f27eaf5396f8f36370e0a2be3a9a090ee`.
+- status: Rejected (the clone-failure premise was false; the stale release pin
+  was corrected separately)
+
+#### F2 — MAJOR | security | docs/image-generation-setup.md | loopback verification hid wildcard listeners
+- what: Filtering `netstat` for `127.0.0.1` could not detect a wildcard bind.
+- why:  Security rules require an enforcement path that can fail.
+- fix:  Replaced it with a PowerShell assertion that inspects every listener on
+  port 8188 and exits nonzero unless all addresses equal `127.0.0.1`.
+- status: Fixed
+
+#### F3 — MAJOR | correctness | docs/image-generation-setup.md | generation step omitted prompt-contract blocks
+- what: The original step named only style, identity, and `Shot:`.
+- why:  The art bible requires five ordered blocks, including `Output:` and the
+  global negatives that enforce the no-weapons rule.
+- fix:  Named all five blocks in order and required changing only `Shot:`.
+- status: Fixed
+
+#### F4 — MAJOR | docs | docs/image-generation-setup.md | reviewer requested a cutout and resize tool
+- what: The first draft referred to later asset processing without naming a
+  tool that creates the canonical transparent 512×512 PNG.
+- why:  Setup instructions must accurately define their completion boundary.
+- fix:  Clarified that Kontext produces opaque candidates and this image-model
+  installation ends at candidate generation; the art bible remains the gate
+  before any asset enters `static/stuffies/`.
+- status: Rejected (adding another image-processing tool and dependency chain is
+  outside the requested image-generation installation)
+
+#### F5 — MINOR | correctness | docs/image-generation-setup.md | offline check referenced an unsaved workflow
+- what: The first generation step never created the workflow named later.
+- why:  Verification prerequisites must be executable from the runbook.
+- fix:  Added **Workflow → Save As** with the stable name
+  `stuffy-kontext-local` and used that name in the offline check.
+- status: Fixed
+
+#### F6 — MINOR | security | docs/image-generation-setup.md | PyTorch used an extra package index
+- what: `--extra-index-url` left same-named packages resolvable from PyPI.
+- why:  The documented supply-chain boundary requires one package source.
+- fix:  Both install paths now use the PyTorch CUDA index as `--index-url`.
+- status: Fixed
+
+#### F7 — MINOR | correctness | docs/image-generation-setup.md | VRAM reservation omitted expected offload
+- what: Reserving 3 GB leaves less VRAM than the 11.9 GB diffusion artifact.
+- why:  Resource claims must be factual for the target 12 GB GPU.
+- fix:  Documented the arithmetic, expected dynamic offload to RAM, and slower
+  generation relative to an unrestricted run.
+- status: Fixed
+
+#### F8 — MINOR | correctness | docs/image-generation-setup.md | startup controls lacked an upstream reference
+- what: The security and resource flags had no direct source citation.
+- why:  Rules need a specific verification path.
+- fix:  Linked the upstream startup-flags reference and named the pinned tag's
+  `python main.py --help` output as authoritative.
+- status: Fixed
+
+#### F9 — MINOR | docs | docs/image-generation-setup.md | disk budget lacked component accounting
+- what: The 35 GB prerequisite did not explain the gap beyond model size.
+- why:  Capacity requirements must remain checkable when dependencies change.
+- fix:  Split the budget into models, runtime/venv, and output/temp headroom.
+- status: Fixed
+
+#### F10 — NIT | docs | docs/image-generation-setup.md | generation omitted seed pinning
+- what: The first draft did not carry the art bible's approved-seed rule.
+- why:  Cross-document consistency controls must remain enforceable.
+- fix:  Added a step to record and pin the seed, then vary only `Shot:`.
+- status: Fixed
+
+#### F11 — NIT | docs | docs/image-generation-setup.md | license link landed on the model card
+- what: The operator was told to review a license through an indirect link.
+- why:  Documentation links should land on the cited artifact.
+- fix:  Linked directly to the upstream `LICENSE.md`.
+- status: Fixed
+
+#### F12 — BLOCK | security | docs/image-generation-setup.md | initial commit verification ran after dependency installation
+- what: A moved tag could supply requirements before the expected commit was
+  checked.
+- why:  A supply-chain check must run before consuming cloned instructions.
+- fix:  The exact HEAD assertion now runs immediately after clone and before
+  virtual-environment creation or any `pip` command.
+- status: Fixed
+
+#### F13 — BLOCK | security | docs/image-generation-setup.md | update procedure installed from an unverified tag
+- what: The update path checked out a tag and immediately consumed its
+  requirements.
+- why:  Deliberate updates require the same pre-execution source boundary as a
+  fresh installation.
+- fix:  Updates now require reviewed tag and full commit values and assert HEAD
+  before `pip` runs.
+- status: Fixed
+
+Final follow-up by Claude Opus 4.8 independently verified the release commit,
+CUDA index, startup flags, loopback assertion, license, prompt contract, offline
+operation, and update ordering, then returned `NO FINDINGS`. After rebasing onto
+the admin-dashboard change, GPT-5.5 verified the private `art-review/` flow and
+the complete final diff, then returned `NO FINDINGS`.
